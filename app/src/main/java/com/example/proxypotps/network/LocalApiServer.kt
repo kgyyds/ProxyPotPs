@@ -57,7 +57,7 @@ class LocalApiServer @Inject constructor(
         server = embeddedServer(
             factory = CIO,
             port = port,
-            host = "127.0.0.1",
+            host = "0.0.0.0",
             module = { module(taskDispatcher, json) }
         ).start(wait = false)
     }
