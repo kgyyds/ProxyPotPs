@@ -22,7 +22,12 @@ class SsOutboundDialer @Inject constructor() : OutboundDialer {
         return withContext(Dispatchers.IO) {
             val socket = Socket()
             socket.soTimeout = timeoutMs.toInt()
-            socket.connect(InetSocketAddress(node.server, node.port), timeoutMs.toInt())
+            try {
+                socket.connect(InetSocketAddress(node.server, node.port), timeoutMs.toInt())
+            } catch (error: Exception) {
+                throw IllegalStateException("stage=connect: ${error.message}", error)
+            }
+
             val output = socket.getOutputStream()
             val input = socket.getInputStream()
 
@@ -36,17 +41,44 @@ class SsOutboundDialer @Inject constructor() : OutboundDialer {
                 "chacha20-ietf-poly1305" -> 32
                 else -> error("Unsupported cipher $cipher")
             }
+
             val masterKey = SsCrypto.deriveKey(password, keyLength)
-            val salt = SsCrypto.randomBytes(saltLength)
-            val subKey = SsCrypto.hkdfSha1(salt, masterKey, "ss-subkey".toByteArray(Charsets.UTF_8), keyLength)
-            val aeadCipher = SsAeadCipher(cipher, subKey)
+            val clientSalt = SsCrypto.randomBytes(saltLength)
+            val encryptSubKey = SsCrypto.hkdfSha1(clientSalt, masterKey, "ss-subkey".toByteArray(Charsets.UTF_8), keyLength)
+            val encryptCipher = SsAeadCipher(cipher, encryptSubKey)
+            val encryptNonce = SsNonce()
 
-            output.write(salt)
-            output.flush()
+            try {
+                output.write(clientSalt)
+                output.flush()
+            } catch (error: Exception) {
+                throw IllegalStateException("stage=write_client_salt: ${error.message}", error)
+            }
 
-            val tunnel = SsAeadTunnel(input, output, aeadCipher)
             val addressHeader = buildAddressHeader(destHost, destPort)
-            tunnel.writeChunk(addressHeader)
+            try {
+                writeEncryptedChunk(output, encryptCipher, encryptNonce, addressHeader)
+            } catch (error: Exception) {
+                throw IllegalStateException("stage=send_dst_header: ${error.message}", error)
+            }
+
+            val serverSalt = try {
+                SsAeadTunnel.readFully(input, saltLength) ?: throw IllegalStateException("empty_server_salt")
+            } catch (error: Exception) {
+                throw IllegalStateException("stage=read_server_salt: ${error.message}", error)
+            }
+
+            val decryptSubKey = SsCrypto.hkdfSha1(serverSalt, masterKey, "ss-subkey".toByteArray(Charsets.UTF_8), keyLength)
+            val decryptCipher = SsAeadCipher(cipher, decryptSubKey)
+
+            val tunnel = SsAeadTunnel(
+                input = input,
+                output = output,
+                encryptCipher = encryptCipher,
+                decryptCipher = decryptCipher,
+                encryptNonce = encryptNonce,
+                decryptNonce = SsNonce()
+            )
 
             object : SocketLike {
                 override val input = SsTunnelInputStream(tunnel)
@@ -142,3 +174,19 @@ private class ByteArrayOutputStreamWithLimit {
 
 private fun String.isIpV4(): Boolean = Regex("^\\d+\\.\\d+\\.\\d+\\.\\d+$").matches(this)
 private fun String.isIpV6(): Boolean = contains(":")
+
+private fun writeEncryptedChunk(
+    output: java.io.OutputStream,
+    cipher: SsAeadCipher,
+    nonce: SsNonce,
+    plaintext: ByteArray
+) {
+    val lengthBytes = byteArrayOf(((plaintext.size ushr 8) and 0xFF).toByte(), (plaintext.size and 0xFF).toByte())
+    val lengthCipher = cipher.encrypt(nonce.current(), lengthBytes)
+    nonce.increment()
+    val dataCipher = cipher.encrypt(nonce.current(), plaintext)
+    nonce.increment()
+    output.write(lengthCipher)
+    output.write(dataCipher)
+    output.flush()
+}

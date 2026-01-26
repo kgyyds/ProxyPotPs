@@ -21,7 +21,8 @@ class NodeProber @Inject constructor(
             Log.w("NodeProber", "Probe timeout for ${node.name}")
             ProbeResult.Timeout()
         } catch (error: Throwable) {
-            Log.w("NodeProber", "Probe failed for ${node.name}: ${error.message}")
+            val typeName = error::class.java.simpleName
+            Log.w("NodeProber", "Probe failed for ${node.name}: [$typeName] ${error.message}")
             ProbeResult.Unavailable(error.message ?: "probe_error")
         }
     }
@@ -54,12 +55,24 @@ class NodeProber @Inject constructor(
         }
 
         val start = System.currentTimeMillis()
-        val socket = dialer.openTunnel(node, host, port, timeoutMs)
+        val socket = try {
+            dialer.openTunnel(node, host, port, timeoutMs)
+        } catch (error: Exception) {
+            throw IllegalStateException("stage=open_tunnel: ${error.message}", error)
+        }
         socket.use {
             val request = buildHttpRequest(host, path)
-            it.output.write(request)
-            it.output.flush()
-            val responseLine = readResponseLine(it.input) ?: return ProbeResult.Unavailable("no_response")
+            try {
+                it.output.write(request)
+                it.output.flush()
+            } catch (error: Exception) {
+                throw IllegalStateException("stage=http_request: ${error.message}", error)
+            }
+            val responseLine = try {
+                readResponseLine(it.input)
+            } catch (error: Exception) {
+                throw IllegalStateException("stage=read_response: ${error.message}", error)
+            } ?: return ProbeResult.Unavailable("no_response")
             val latency = (System.currentTimeMillis() - start).toInt()
             val code = parseStatusCode(responseLine)
             if (code != null && code in 200..399) {

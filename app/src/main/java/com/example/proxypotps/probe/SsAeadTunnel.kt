@@ -6,17 +6,18 @@ import java.io.OutputStream
 internal class SsAeadTunnel(
     private val input: InputStream,
     private val output: OutputStream,
-    private val cipher: SsAeadCipher
+    private val encryptCipher: SsAeadCipher,
+    private val decryptCipher: SsAeadCipher,
+    private val encryptNonce: SsNonce = SsNonce(),
+    private val decryptNonce: SsNonce = SsNonce()
 ) {
-    private val writeNonce = SsNonce()
-    private val readNonce = SsNonce()
 
     fun writeChunk(plaintext: ByteArray) {
         val lengthBytes = byteArrayOf(((plaintext.size ushr 8) and 0xFF).toByte(), (plaintext.size and 0xFF).toByte())
-        val lengthCipher = cipher.encrypt(writeNonce.current(), lengthBytes)
-        writeNonce.increment()
-        val dataCipher = cipher.encrypt(writeNonce.current(), plaintext)
-        writeNonce.increment()
+        val lengthCipher = encryptCipher.encrypt(encryptNonce.current(), lengthBytes)
+        encryptNonce.increment()
+        val dataCipher = encryptCipher.encrypt(encryptNonce.current(), plaintext)
+        encryptNonce.increment()
         output.write(lengthCipher)
         output.write(dataCipher)
         output.flush()
@@ -24,12 +25,12 @@ internal class SsAeadTunnel(
 
     fun readChunk(): ByteArray? {
         val lengthCipher = readFully(input, 2 + TAG_LENGTH) ?: return null
-        val lengthPlain = cipher.decrypt(readNonce.current(), lengthCipher)
-        readNonce.increment()
+        val lengthPlain = decryptCipher.decrypt(decryptNonce.current(), lengthCipher)
+        decryptNonce.increment()
         val length = ((lengthPlain[0].toInt() and 0xFF) shl 8) or (lengthPlain[1].toInt() and 0xFF)
         val dataCipher = readFully(input, length + TAG_LENGTH) ?: return null
-        val dataPlain = cipher.decrypt(readNonce.current(), dataCipher)
-        readNonce.increment()
+        val dataPlain = decryptCipher.decrypt(decryptNonce.current(), dataCipher)
+        decryptNonce.increment()
         return dataPlain
     }
 
