@@ -5,10 +5,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -130,19 +134,31 @@ private fun ManualTaskDialog(
 ) {
     var mainTaskId by remember { mutableStateOf("manual-${System.currentTimeMillis()}") }
     var subTasks by remember { mutableStateOf(listOf(SubTaskInput())) }
+    val listState = rememberLazyListState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("手动添加任务") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = mainTaskId,
-                    onValueChange = { mainTaskId = it },
-                    label = { Text("mainTaskId") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                subTasks.forEachIndexed { index, input ->
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .imePadding()
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = mainTaskId,
+                        onValueChange = { mainTaskId = it },
+                        label = { Text("mainTaskId") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                items(subTasks.size) { index ->
+                    val input = subTasks[index]
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(text = "子任务 ${index + 1}", fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(
@@ -187,8 +203,10 @@ private fun ManualTaskDialog(
                         )
                     }
                 }
-                OutlinedButton(onClick = { subTasks = subTasks + SubTaskInput() }) {
-                    Text("添加子任务")
+                item {
+                    OutlinedButton(onClick = { subTasks = subTasks + SubTaskInput() }) {
+                        Text("添加子任务")
+                    }
                 }
             }
         },

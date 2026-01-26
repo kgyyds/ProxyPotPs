@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +23,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +53,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
     Column(modifier = Modifier.fillMaxWidth()) {
         TopAppBar(title = { Text("设置") })
+        val yamlScrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .padding(16.dp)
@@ -67,13 +70,19 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     Text("重新解析/重新测速")
                 }
             }
-            OutlinedTextField(
-                value = settings.yamlText,
-                onValueChange = { text -> viewModel.updateSettings { it.copy(yamlText = text) } },
-                label = { Text("Clash 配置 YAML") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 6
-            )
+            Column {
+                Text(text = "Clash 配置 YAML", style = MaterialTheme.typography.labelMedium)
+                Spacer(modifier = Modifier.size(6.dp))
+                OutlinedTextField(
+                    value = settings.yamlText,
+                    onValueChange = { text -> viewModel.updateSettings { it.copy(yamlText = text) } },
+                    label = { Text("粘贴或导入 YAML") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(260.dp)
+                        .verticalScroll(yamlScrollState)
+                )
+            }
             Button(onClick = { viewModel.parseAndProbe() }) {
                 Text("保存并解析")
             }
