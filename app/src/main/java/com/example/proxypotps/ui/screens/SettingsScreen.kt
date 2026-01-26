@@ -84,9 +84,13 @@ LaunchedEffect(settings.apiPort) {
                 TextButton(onClick = { viewModel.parseAndProbe() }) {
                     Text("重新解析/重新测速")
                 }
+                Spacer(modifier = Modifier.size(8.dp))
+                TextButton(onClick = { viewModel.probeDeterministic() }) {
+                    Text("固定 URL 测试")
+                }
             }
             Column {
-                Text(text = "Clash 配置 YAML", style = MaterialTheme.typography.labelMedium)
+                Text(text = "节点配置 YAML", style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.size(6.dp))
                 OutlinedTextField(
                     value = settings.yamlText,
@@ -118,20 +122,6 @@ LaunchedEffect(settings.apiPort) {
     Text("应用端口")
 }
             OutlinedTextField(
-                value = settings.clashHost,
-                onValueChange = { value -> viewModel.updateSettings { it.copy(clashHost = value) } },
-                label = { Text("Clash 本地代理地址") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = settings.clashPort.toString(),
-                onValueChange = { value ->
-                    viewModel.updateSettings { it.copy(clashPort = value.toIntOrNull() ?: it.clashPort) }
-                },
-                label = { Text("Clash 端口") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
                 value = settings.probeUrl,
                 onValueChange = { value -> viewModel.updateSettings { it.copy(probeUrl = value) } },
                 label = { Text("探测 URL") },
@@ -144,7 +134,7 @@ LaunchedEffect(settings.apiPort) {
                 modifier = Modifier.fillMaxWidth()
             )
             Text(
-                text = "提示：当前探测仅基于 Clash 当前出口。",
+                text = "提示：探测通过本地代理端口直连每个节点。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )

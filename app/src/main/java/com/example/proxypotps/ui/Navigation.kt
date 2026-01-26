@@ -20,11 +20,10 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.proxypotps.ui.screens.JobDetailScreen
+import androidx.navigation.NavType
 import com.example.proxypotps.ui.screens.NodesScreen
+import com.example.proxypotps.ui.screens.JobDetailScreen
 import com.example.proxypotps.ui.screens.SettingsScreen
 import com.example.proxypotps.ui.screens.WorkScreen
 
@@ -41,35 +40,21 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 @Composable
 fun ProxyPotNavHost(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
-
-    Scaffold(
-        bottomBar = { BottomNavigationBar(navController = navController) }
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Nodes.route,
-            modifier = modifier
-                .padding(innerPadding)
-                .fillMaxSize()
+    NavHost(
+        modifier = modifier,
+        navController = navController,
+        startDestination = Screen.Nodes.route
+    ) {
+        composable(Screen.Nodes.route) { NodesScreen() }
+        composable(Screen.Work.route) {
+            WorkScreen(onJobClick = { taskId -> navController.navigate(Screen.JobDetail.createRoute(taskId)) })
+        }
+        composable(Screen.Settings.route) { SettingsScreen() }
+        composable(
+            route = Screen.JobDetail.route,
+            arguments = listOf(navArgument("taskId") { type = NavType.LongType })
         ) {
-            composable(Screen.Nodes.route) { NodesScreen() }
-
-            composable(Screen.Work.route) {
-                WorkScreen(
-                    onJobClick = { taskId ->
-                        navController.navigate(Screen.JobDetail.createRoute(taskId))
-                    }
-                )
-            }
-
-            composable(Screen.Settings.route) { SettingsScreen() }
-
-            composable(
-                route = Screen.JobDetail.route,
-                arguments = listOf(navArgument("taskId") { type = NavType.LongType })
-            ) {
-                JobDetailScreen(onBack = { navController.popBackStack() })
-            }
+            JobDetailScreen(onBack = { navController.popBackStack() })
         }
     }
 }

@@ -20,8 +20,6 @@ class SettingsDataStore @Inject constructor(
 ) {
     private object Keys {
         val apiPort = intPreferencesKey("api_port")
-        val clashHost = stringPreferencesKey("clash_host")
-        val clashPort = intPreferencesKey("clash_port")
         val probeUrl = stringPreferencesKey("probe_url")
         val yamlText = stringPreferencesKey("yaml_text")
         val nodeStrategy = stringPreferencesKey("node_strategy")
@@ -30,8 +28,6 @@ class SettingsDataStore @Inject constructor(
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
             apiPort = prefs[Keys.apiPort] ?: 9999,
-            clashHost = prefs[Keys.clashHost] ?: "127.0.0.1",
-            clashPort = prefs[Keys.clashPort] ?: 7890,
             probeUrl = prefs[Keys.probeUrl] ?: "http://www.gstatic.com/generate_204",
             yamlText = prefs[Keys.yamlText] ?: "",
             nodeStrategy = prefs[Keys.nodeStrategy] ?: "current"
@@ -42,16 +38,12 @@ class SettingsDataStore @Inject constructor(
         context.dataStore.edit { prefs: MutablePreferences ->
             val current = AppSettings(
                 apiPort = prefs[Keys.apiPort] ?: 9999,
-                clashHost = prefs[Keys.clashHost] ?: "127.0.0.1",
-                clashPort = prefs[Keys.clashPort] ?: 7890,
                 probeUrl = prefs[Keys.probeUrl] ?: "http://www.gstatic.com/generate_204",
                 yamlText = prefs[Keys.yamlText] ?: "",
                 nodeStrategy = prefs[Keys.nodeStrategy] ?: "current"
             )
             val next = update(current)
             prefs[Keys.apiPort] = next.apiPort
-            prefs[Keys.clashHost] = next.clashHost
-            prefs[Keys.clashPort] = next.clashPort
             prefs[Keys.probeUrl] = next.probeUrl
             prefs[Keys.yamlText] = next.yamlText
             prefs[Keys.nodeStrategy] = next.nodeStrategy
@@ -62,8 +54,6 @@ class SettingsDataStore @Inject constructor(
 
 data class AppSettings(
     val apiPort: Int,
-    val clashHost: String,
-    val clashPort: Int,
     val probeUrl: String,
     val yamlText: String,
     val nodeStrategy: String

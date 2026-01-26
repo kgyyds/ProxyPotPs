@@ -3,7 +3,6 @@ package com.example.proxypotps.scheduler
 import android.os.SystemClock
 import android.util.Log
 import com.example.proxypotps.data.repository.NodeRepository
-import com.example.proxypotps.data.repository.SettingsRepository
 import com.example.proxypotps.data.repository.TaskRepository
 import com.example.proxypotps.domain.model.NodeStatus
 import com.example.proxypotps.domain.model.JobStatus
@@ -13,13 +12,13 @@ import com.example.proxypotps.domain.model.SubTaskRequest
 import com.example.proxypotps.domain.model.SubTaskResult
 import com.example.proxypotps.domain.model.TaskStatus
 import com.example.proxypotps.network.ApiHttpClient
+import com.example.proxypotps.network.LocalProxyManager
 import com.example.proxypotps.di.ApplicationScope
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -27,16 +26,19 @@ import java.util.concurrent.atomic.AtomicInteger
 @Singleton
 class TaskDispatcher @Inject constructor(
     private val nodeRepository: NodeRepository,
-    private val settingsRepository: SettingsRepository,
     private val taskRepository: TaskRepository,
     private val apiHttpClient: ApiHttpClient,
+    private val localProxyManager: LocalProxyManager,
     @ApplicationScope private val scope: CoroutineScope
 ) {
     suspend fun runMainTask(request: RunTaskRequest): RunTaskResponse {
         val start = SystemClock.elapsedRealtime()
         Log.d("TASK", "start mainTask=${request.mainTaskId} subTasks=${request.subTasks.size}")
-        val settings = settingsRepository.settingsFlow.first()
-        val nodes = nodeRepository.getNodes().filter { it.status == NodeStatus.AVAILABLE }
+        val nodesWithProxy = localProxyManager.ensureProxies(nodeRepository.getNodes())
+        nodesWithProxy.forEach { node ->
+            nodeRepository.updateLocalProxy(node.id, node.localProxyHost, node.localProxyPort, node.localProxyType)
+        }
+        val nodes = nodesWithProxy.filter { it.status == NodeStatus.AVAILABLE && it.localProxyPort != null }
         if (nodes.isEmpty()) {
             Log.e("TASK", "no available nodes for mainTask=${request.mainTaskId}")
             val taskCreation = taskRepository.createTask(request.mainTaskId, request.subTasks)
@@ -79,7 +81,7 @@ class TaskDispatcher @Inject constructor(
 
         val taskCreation = taskRepository.createTask(request.mainTaskId, request.subTasks)
         val workers = nodes.associateWith { node ->
-            NodeWorker(scope, apiHttpClient, node.name)
+            NodeWorker(scope, apiHttpClient, node)
         }
         val completedCounter = AtomicInteger(0)
         val successCounter = AtomicInteger(0)
@@ -91,10 +93,17 @@ class TaskDispatcher @Inject constructor(
             request.subTasks.mapIndexed { index, subTask ->
                 scope.async {
                     val firstNode = nodes[index % nodes.size]
-                    val result = executeWithRetry(subTask, firstNode, nodes, workers, settings.clashHost, settings.clashPort)
+                    val result = executeWithRetry(subTask, firstNode, nodes, workers, index)
                     val rowId = taskCreation.subTaskRowIds[subTask.subTaskId]
                     if (rowId != null) {
                         taskRepository.updateSubTaskResult(rowId, result)
+                    }
+                    val usedNode = nodes.firstOrNull { it.name == result.nodeName }
+                    if (usedNode != null) {
+                        Log.d(
+                            "TASK",
+                            "subtask=${subTask.subTaskId} node=${usedNode.name} proxy=${usedNode.localProxyHost}:${usedNode.localProxyPort}"
+                        )
                     }
                     when (result.status) {
                         TaskStatus.OK -> successCounter.incrementAndGet()
@@ -141,17 +150,20 @@ class TaskDispatcher @Inject constructor(
         firstNode: com.example.proxypotps.domain.model.ProxyNode,
         nodes: List<com.example.proxypotps.domain.model.ProxyNode>,
         workers: Map<com.example.proxypotps.domain.model.ProxyNode, NodeWorker>,
-        proxyHost: String,
-        proxyPort: Int
+        index: Int
     ): SubTaskResult {
         val firstResult = workers.getValue(firstNode)
-            .submit(subTask, proxyHost, proxyPort, 8)
+            .submit(subTask, 8)
             .copy(retryCount = 0)
         if (firstResult.status == TaskStatus.OK) return firstResult
-        val fallbackNode = nodes.firstOrNull { it.id != firstNode.id } ?: firstNode
+        val fallbackNode = if (nodes.size > 1) {
+            nodes[(index + 1) % nodes.size]
+        } else {
+            firstNode
+        }
         if (fallbackNode.id == firstNode.id) return firstResult
         return workers.getValue(fallbackNode)
-            .submit(subTask, proxyHost, proxyPort, 8)
+            .submit(subTask, 8)
             .copy(retryCount = 1)
     }
 

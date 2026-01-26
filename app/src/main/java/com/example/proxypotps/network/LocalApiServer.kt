@@ -12,16 +12,12 @@ import io.ktor.server.application.*
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.path
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
-import io.ktor.server.routing.*
-
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.Json
-
+import io.ktor.server.routing.post
+import io.ktor.server.routing.routing
+import io.ktor.server.routing.get
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -83,24 +79,37 @@ class LocalApiServer @Inject constructor(
         server = null
     }
 
+    private fun restart(port: Int) {
+        if (port !in 1..65535) {
+            Log.e("API", "invalid apiPort=$port, skip restart")
+            return
+        }
+        try {
+            server?.stop(1000, 2000)
+            server = embeddedServer(
+                factory = CIO,
+                port = port,
+                host = "0.0.0.0",
+                module = { module(taskDispatcher, json, port) }
+            ).start(wait = false)
+            Log.i("API", "server started on 0.0.0.0:$port")
+        } catch (error: Exception) {
+            Log.e("API", "server restart failed port=$port", error)
+        }
+    }
 
-    /**
-     * ⭐⭐ 核心修复在这里 ⭐⭐
-     * 只保留一层 lambda
-     */
-    private fun module(
-        taskDispatcher: TaskDispatcher,
-        json: Json
-    ): Application.() -> Unit = {
-
+    private fun module(taskDispatcher: TaskDispatcher, json: Json, port: Int): Application.() -> Unit = {
         install(ContentNegotiation) {
             json(json)
         }
 
         routing {
-
+            Log.i("API", "routes registered on port=$port")
+            get("/health") {
+                call.respond(mapOf("status" to "ok"))
+            }
             post("/run") {
-
+                Log.i("API", "POST ${call.request.path()}")
                 val request = try {
                     call.receive<RunTaskRequest>()
                 } catch (e: Exception) {
