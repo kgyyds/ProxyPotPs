@@ -4,14 +4,13 @@ import android.util.Log
 import com.example.proxypotps.data.repository.SettingsRepository
 import com.example.proxypotps.domain.model.RunTaskRequest
 import com.example.proxypotps.scheduler.TaskDispatcher
+import com.example.proxypotps.di.ApplicationScope
+
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.application.Application
-import io.ktor.server.application.call
-import io.ktor.server.application.install
+import io.ktor.server.application.*
 import io.ktor.server.cio.CIO
-import io.ktor.server.engine.ApplicationEngine
-import io.ktor.server.engine.embeddedServer
+import io.ktor.server.engine.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.path
 import io.ktor.server.request.receive
@@ -41,12 +40,14 @@ class LocalApiServer @Inject constructor(
     private val json: Json,
     @ApplicationScope private val scope: CoroutineScope
 ) {
+
     private var server: ApplicationEngine? = null
     private var watcherJob: Job? = null
     private val restartMutex = Mutex()
 
     fun start() {
         if (watcherJob != null) return
+
         watcherJob = scope.launch {
             settingsRepository.settingsFlow
                 .map { settings -> settings.apiPort }
@@ -56,6 +57,7 @@ class LocalApiServer @Inject constructor(
                 }
         }
     }
+
 
     fun stop() {
         watcherJob?.cancel()
@@ -91,6 +93,7 @@ class LocalApiServer @Inject constructor(
         install(ContentNegotiation) {
             json(json)
         }
+
         routing {
             Log.i("API", "routes registered on port=$port")
             get("/health") {
@@ -100,12 +103,16 @@ class LocalApiServer @Inject constructor(
                 Log.i("API", "POST ${call.request.path()}")
                 val request = try {
                     call.receive<RunTaskRequest>()
-                } catch (error: Exception) {
-                    Log.e("TASK", "invalid request", error)
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "invalid_request"))
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "invalid_request")
+                    )
                     return@post
                 }
+
                 val response = taskDispatcher.runMainTask(request)
+
                 call.respond(response)
             }
         }
