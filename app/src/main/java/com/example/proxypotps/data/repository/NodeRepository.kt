@@ -1,5 +1,6 @@
 package com.example.proxypotps.data.repository
 
+import android.util.Log
 import com.example.proxypotps.data.local.NodeDao
 import com.example.proxypotps.data.local.NodeEntity
 import com.example.proxypotps.domain.model.NodeStatus
@@ -34,10 +35,13 @@ class NodeRepository @Inject constructor(
 }
 
 private fun NodeEntity.toDomain(json: Json): ProxyNode {
-    val extrasMap = runCatching {
+    val extrasMap = try {
         json.parseToJsonElement(extrasJson).jsonObject.mapValues { it.value.toString().trim('"') }
-    }.getOrDefault(emptyMap())
-    val parsedStatus = runCatching { NodeStatus.valueOf(status) }.getOrDefault(NodeStatus.UNKNOWN)
+    } catch (error: Exception) {
+        Log.e("YAML", "extras parse failed", error)
+        throw error
+    }
+    val parsedStatus = NodeStatus.entries.firstOrNull { it.name == status } ?: NodeStatus.UNKNOWN
     return ProxyNode(
         id = id,
         name = name,

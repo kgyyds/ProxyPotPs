@@ -1,5 +1,6 @@
 package com.example.proxypotps.probe
 
+import android.util.Log
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -24,7 +25,13 @@ class TrojanOutboundDialer @Inject constructor() : OutboundDialer {
         return withContext(Dispatchers.IO) {
             val socket = Socket()
             socket.soTimeout = timeoutMs.toInt()
-            socket.connect(InetSocketAddress(node.server, node.port), timeoutMs.toInt())
+            try {
+                socket.connect(InetSocketAddress(node.server, node.port), timeoutMs.toInt())
+                Log.d("TROJAN", "tcp connect ok ${node.name} ${node.server}:${node.port}")
+            } catch (error: Exception) {
+                Log.e("TROJAN", "tcp connect failed ${node.name}", error)
+                throw error
+            }
             val sslContext = SSLContext.getInstance("TLS")
             sslContext.init(null, null, null)
             val factory = sslContext.socketFactory
@@ -33,7 +40,13 @@ class TrojanOutboundDialer @Inject constructor() : OutboundDialer {
             val sniHost = node.sni ?: node.server
             params.serverNames = listOf(SNIHostName(sniHost))
             sslSocket.sslParameters = params
-            sslSocket.startHandshake()
+            try {
+                sslSocket.startHandshake()
+                Log.d("TROJAN", "tls handshake ok ${node.name}")
+            } catch (error: Exception) {
+                Log.e("TROJAN", "tls handshake failed ${node.name}", error)
+                throw error
+            }
             sslSocket.soTimeout = timeoutMs.toInt()
 
             val output = sslSocket.outputStream
@@ -41,8 +54,14 @@ class TrojanOutboundDialer @Inject constructor() : OutboundDialer {
 
             val request = buildTrojanRequest(destHost, destPort)
             val header = buildTrojanHeader(password, request)
-            output.write(header)
-            output.flush()
+            try {
+                output.write(header)
+                output.flush()
+                Log.d("TROJAN", "request sent ${node.name} to $destHost:$destPort")
+            } catch (error: Exception) {
+                Log.e("TROJAN", "request send failed ${node.name}", error)
+                throw error
+            }
 
             object : SocketLike {
                 override val input = input

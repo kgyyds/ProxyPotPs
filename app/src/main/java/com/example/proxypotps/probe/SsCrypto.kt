@@ -9,7 +9,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.bouncycastle.jcajce.spec.AEADParameterSpec
+
 internal object SsCrypto {
     private val secureRandom = SecureRandom()
 
@@ -87,8 +87,8 @@ internal class SsAeadCipher(private val cipherName: String, private val key: Byt
             }
             "chacha20-ietf-poly1305" -> {
                 val cipher = Cipher.getInstance("ChaCha20-Poly1305", BouncyCastleProvider.PROVIDER_NAME)
-val spec = AEADParameterSpec(nonce, tagLengthBits) // 128-bit tag
-cipher.init(mode, SecretKeySpec(key, "ChaCha20"), spec)
+                val spec = IvParameterSpec(nonce)
+                cipher.init(mode, SecretKeySpec(key, "ChaCha20"), spec)
                 cipher
             }
             else -> error("Unsupported cipher $cipherName")
@@ -102,10 +102,12 @@ internal class SsNonce {
     fun current(): ByteArray = nonce.copyOf()
 
     fun increment() {
-    for (i in nonce.size - 1 downTo 0) {
-        val v = (nonce[i].toInt() and 0xFF) + 1
-        nonce[i] = v.toByte()
-        if (v <= 0xFF) return // 没进位就结束
+        for (i in nonce.indices) {
+            val value = (nonce[i].toInt() and 0xFF) + 1
+            nonce[i] = value.toByte()
+            if (value <= 0xFF) {
+                break
+            }
+        }
     }
-}
 }

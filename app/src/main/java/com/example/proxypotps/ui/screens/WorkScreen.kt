@@ -39,6 +39,7 @@ import com.example.proxypotps.domain.model.HttpMethod
 import com.example.proxypotps.domain.model.SubTaskRequest
 import com.example.proxypotps.domain.model.TaskStatus
 import com.example.proxypotps.ui.viewmodel.WorkViewModel
+import android.util.Log
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -95,7 +96,7 @@ fun WorkScreen(viewModel: WorkViewModel = hiltViewModel()) {
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
-                                    val status = runCatching { TaskStatus.valueOf(subTask.status) }.getOrDefault(TaskStatus.FAILED)
+                                    val status = TaskStatus.entries.firstOrNull { it.name == subTask.status } ?: TaskStatus.FAILED
                                     val statusText = when (status) {
                                         TaskStatus.OK -> "ok"
                                         TaskStatus.FAILED -> "failed"
@@ -215,14 +216,17 @@ private fun ManualTaskDialog(
                 val parsed = subTasks.mapNotNull { input ->
                     if (input.subTaskId.isBlank() || input.url.isBlank()) return@mapNotNull null
                     val method = if (input.method.equals("POST", true)) HttpMethod.POST else HttpMethod.GET
-                    val params = runCatching {
+                    val params = try {
                         if (input.paramsJson.isBlank()) {
                             emptyMap()
                         } else {
                             val element = Json.parseToJsonElement(input.paramsJson)
                             element.jsonObject.mapValues { it.value.toString().trim('"') }
                         }
-                    }.getOrDefault(emptyMap())
+                    } catch (error: Exception) {
+                        Log.e("TASK", "params json parse failed", error)
+                        throw error
+                    }
                     SubTaskRequest(
                         subTaskId = input.subTaskId,
                         url = input.url,

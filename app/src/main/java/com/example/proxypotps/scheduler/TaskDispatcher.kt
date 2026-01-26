@@ -1,5 +1,7 @@
 package com.example.proxypotps.scheduler
 
+import android.os.SystemClock
+import android.util.Log
 import com.example.proxypotps.data.repository.NodeRepository
 import com.example.proxypotps.data.repository.SettingsRepository
 import com.example.proxypotps.data.repository.TaskRepository
@@ -29,9 +31,12 @@ class TaskDispatcher @Inject constructor(
     @ApplicationScope private val scope: CoroutineScope
 ) {
     suspend fun runMainTask(request: RunTaskRequest): RunTaskResponse {
+        val start = SystemClock.elapsedRealtime()
+        Log.d("TASK", "start mainTask=${request.mainTaskId} subTasks=${request.subTasks.size}")
         val settings = settingsRepository.settingsFlow.first()
         val nodes = nodeRepository.getNodes().filter { it.status == NodeStatus.AVAILABLE }
         if (nodes.isEmpty()) {
+            Log.e("TASK", "no available nodes for mainTask=${request.mainTaskId}")
             return RunTaskResponse(
                 mainTaskId = request.mainTaskId,
                 results = request.subTasks.map {
@@ -69,6 +74,8 @@ class TaskDispatcher @Inject constructor(
             }.awaitAll()
         }
 
+        val elapsed = SystemClock.elapsedRealtime() - start
+        Log.d("TASK", "finish mainTask=${request.mainTaskId} cost=${elapsed}ms")
         return RunTaskResponse(
             mainTaskId = request.mainTaskId,
             results = results

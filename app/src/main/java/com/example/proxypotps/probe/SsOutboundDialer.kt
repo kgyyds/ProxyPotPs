@@ -1,13 +1,13 @@
 package com.example.proxypotps.probe
 
+import android.util.Log
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Singleton
 class SsOutboundDialer @Inject constructor() : OutboundDialer {
@@ -24,8 +24,10 @@ class SsOutboundDialer @Inject constructor() : OutboundDialer {
             socket.soTimeout = timeoutMs.toInt()
             try {
                 socket.connect(InetSocketAddress(node.server, node.port), timeoutMs.toInt())
+                Log.d("SS", "tcp connect ok ${node.name} ${node.server}:${node.port}")
             } catch (error: Exception) {
-                throw IllegalStateException("stage=connect: ${error.message}", error)
+                Log.e("SS", "tcp connect failed ${node.name}", error)
+                throw error
             }
 
             val output = socket.getOutputStream()
@@ -51,22 +53,28 @@ class SsOutboundDialer @Inject constructor() : OutboundDialer {
             try {
                 output.write(clientSalt)
                 output.flush()
+                Log.d("SS", "clientSalt sent ${node.name}")
             } catch (error: Exception) {
-                throw IllegalStateException("stage=write_client_salt: ${error.message}", error)
+                Log.e("SS", "clientSalt send failed ${node.name}", error)
+                throw error
             }
 
             val addressHeader = buildAddressHeader(destHost, destPort)
             try {
                 writeEncryptedChunk(output, encryptCipher, encryptNonce, addressHeader)
+                Log.d("SS", "dst header sent ${node.name} to $destHost:$destPort")
             } catch (error: Exception) {
-                throw IllegalStateException("stage=send_dst_header: ${error.message}", error)
+                Log.e("SS", "dst header send failed ${node.name}", error)
+                throw error
             }
 
             val serverSalt = try {
                 SsAeadTunnel.readFully(input, saltLength) ?: throw IllegalStateException("empty_server_salt")
             } catch (error: Exception) {
-                throw IllegalStateException("stage=read_server_salt: ${error.message}", error)
+                Log.e("SS", "serverSalt read failed ${node.name}", error)
+                throw error
             }
+            Log.d("SS", "serverSalt read ${node.name}")
 
             val decryptSubKey = SsCrypto.hkdfSha1(serverSalt, masterKey, "ss-subkey".toByteArray(Charsets.UTF_8), keyLength)
             val decryptCipher = SsAeadCipher(cipher, decryptSubKey)

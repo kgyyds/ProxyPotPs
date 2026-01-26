@@ -11,6 +11,8 @@ import com.example.proxypotps.probe.ProbeResult
 import com.example.proxypotps.util.YamlParser
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -23,7 +25,9 @@ class NodeService @Inject constructor(
     fun observeNodes(): Flow<List<ProxyNode>> = nodeRepository.observeNodes()
 
     suspend fun parseAndStore(yamlText: String) {
-        val nodes = YamlParser.parseProxyNodes(yamlText)
+        val nodes = withContext(Dispatchers.IO) {
+            YamlParser.parseProxyNodes(yamlText)
+        }
         nodeRepository.replaceNodes(nodes)
     }
 
@@ -39,7 +43,7 @@ class NodeService @Inject constructor(
                 is ProbeResult.Unavailable -> NodeStatus.UNAVAILABLE to null
             }
             if (result is ProbeResult.Unavailable) {
-                Log.w("NodeService", "Probe unavailable ${probeNode.name}: ${result.reason}")
+                Log.e("PROBE", "probe unavailable node=${probeNode.name} reason=${result.reason}")
             }
             nodeRepository.updateStatus(probeNode.id, status, latencyMs)
         }

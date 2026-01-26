@@ -1,5 +1,6 @@
 package com.example.proxypotps.network
 
+import android.util.Log
 import com.example.proxypotps.data.repository.SettingsRepository
 import com.example.proxypotps.domain.model.RunTaskRequest
 import com.example.proxypotps.scheduler.TaskDispatcher
@@ -67,11 +68,13 @@ class LocalApiServer @Inject constructor(
         }
         routing {
             post("/run") {
-                val request = runCatching { call.receive<RunTaskRequest>() }
-                    .getOrElse {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "invalid_request"))
-                        return@post
-                    }
+                val request = try {
+                    call.receive<RunTaskRequest>()
+                } catch (error: Exception) {
+                    Log.e("TASK", "invalid request", error)
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "invalid_request"))
+                    return@post
+                }
                 val response = taskDispatcher.runMainTask(request)
                 call.respond(response)
             }

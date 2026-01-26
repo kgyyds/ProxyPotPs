@@ -9,6 +9,7 @@ import com.example.proxypotps.domain.model.SubTaskRequest
 import com.example.proxypotps.scheduler.TaskDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -23,7 +24,7 @@ class WorkViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun submitManualTask(mainTaskId: String, subTasks: List<SubTaskRequest>) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             taskDispatcher.runMainTask(RunTaskRequest(mainTaskId = mainTaskId, subTasks = subTasks))
         }
     }

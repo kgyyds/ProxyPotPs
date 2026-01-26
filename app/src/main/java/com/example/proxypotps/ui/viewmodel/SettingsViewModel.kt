@@ -8,6 +8,7 @@ import com.example.proxypotps.domain.model.NodeStatus
 import com.example.proxypotps.domain.usecase.NodeService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -42,7 +43,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun parseAndProbe() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val yamlText = settings.value.yamlText
             nodeService.parseAndStore(yamlText)
             nodeService.probeAll()

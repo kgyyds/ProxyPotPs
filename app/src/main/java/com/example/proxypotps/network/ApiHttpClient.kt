@@ -1,5 +1,6 @@
 package com.example.proxypotps.network
 
+import android.util.Log
 import com.example.proxypotps.domain.model.HttpMethod
 import com.example.proxypotps.domain.model.SubTaskRequest
 import com.example.proxypotps.domain.model.SubTaskResult
@@ -37,7 +38,7 @@ class ApiHttpClient @Inject constructor(
                 .callTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
                 .build()
             val start = System.currentTimeMillis()
-            val result = runCatching {
+            try {
                 val httpRequest = buildRequest(request)
                 client.newCall(httpRequest).execute().use { response ->
                     val body = response.body?.string()
@@ -49,8 +50,8 @@ class ApiHttpClient @Inject constructor(
                         durationMs = System.currentTimeMillis() - start
                     )
                 }
-            }
-            result.getOrElse { throwable ->
+            } catch (throwable: Exception) {
+                Log.e("TASK", "subTask failed ${request.subTaskId}", throwable)
                 val status = if (throwable is java.net.SocketTimeoutException) {
                     TaskStatus.TIMEOUT
                 } else {

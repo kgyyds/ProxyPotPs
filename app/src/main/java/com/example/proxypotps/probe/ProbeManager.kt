@@ -1,5 +1,6 @@
 package com.example.proxypotps.probe
 
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,12 @@ class ProbeManager @Inject constructor(
                 nodes.map { node ->
                     async {
                         semaphore.withPermit {
-                            node to nodeProber.probe(node, probeUrl, timeoutMs)
+                            try {
+                                node to nodeProber.probe(node, probeUrl, timeoutMs)
+                            } catch (error: Exception) {
+                                Log.e("PROBE", "probe failed node=${node.name}", error)
+                                node to ProbeResult.Unavailable(error.message ?: "probe_error")
+                            }
                         }
                     }
                 }.awaitAll()

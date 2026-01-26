@@ -1,5 +1,6 @@
 package com.example.proxypotps.probe
 
+import android.os.SystemClock
 import android.util.Log
 import java.net.URI
 import javax.inject.Inject
@@ -13,28 +14,40 @@ class NodeProber @Inject constructor(
     private val trojanDialer: TrojanOutboundDialer
 ) {
     suspend fun probe(node: ProbeNode, probeUrl: String, timeoutMs: Long): ProbeResult {
+        val start = SystemClock.elapsedRealtime()
+        Log.d("PROBE", "start node=${node.name} host=${node.server}:${node.port}")
         return try {
             withTimeout(timeoutMs) {
-                probeInternal(node, probeUrl, timeoutMs)
+                probeInternal(node, probeUrl, timeoutMs, start)
             }
         } catch (timeout: TimeoutCancellationException) {
-            Log.w("NodeProber", "Probe timeout for ${node.name}")
+            Log.e("PROBE", "timeout node=${node.name}", timeout)
             ProbeResult.Timeout()
         } catch (error: Throwable) {
-            val typeName = error::class.java.simpleName
-            Log.w("NodeProber", "Probe failed for ${node.name}: [$typeName] ${error.message}")
-            ProbeResult.Unavailable(error.message ?: "probe_error")
+            Log.e("PROBE", "probe failed node=${node.name}", error)
+            throw error
         }
     }
 
-    private suspend fun probeInternal(node: ProbeNode, probeUrl: String, timeoutMs: Long): ProbeResult {
-        val uri = runCatching { URI(probeUrl) }.getOrNull()
-            ?: return ProbeResult.Unavailable("invalid_probe_url")
+    private suspend fun probeInternal(
+        node: ProbeNode,
+        probeUrl: String,
+        timeoutMs: Long,
+        startMs: Long
+    ): ProbeResult {
+        val uri = try {
+            URI(probeUrl)
+        } catch (error: Exception) {
+            Log.e("PROBE", "invalid probe url=$probeUrl", error)
+            throw error
+        }
         val scheme = uri.scheme?.lowercase() ?: "http"
         if (scheme != "http") {
-            return ProbeResult.Unavailable("unsupported_scheme_$scheme")
+            val error = IllegalArgumentException("unsupported_scheme_$scheme")
+            Log.e("PROBE", "unsupported scheme node=${node.name}", error)
+            throw error
         }
-        val host = uri.host ?: return ProbeResult.Unavailable("invalid_probe_host")
+        val host = uri.host ?: throw IllegalArgumentException("invalid_probe_host")
         val port = if (uri.port != -1) uri.port else 80
         val path = buildString {
             append(if (uri.rawPath.isNullOrEmpty()) "/" else uri.rawPath)
@@ -47,40 +60,45 @@ class NodeProber @Inject constructor(
             "ss", "shadowsocks" -> ssDialer
             "trojan" -> {
                 if (node.network?.lowercase() == "grpc") {
-                    return ProbeResult.Unavailable("Unsupported trojan grpc")
+                    val error = IllegalStateException("Unsupported trojan grpc")
+                    Log.e("PROBE", "trojan grpc unsupported node=${node.name}", error)
+                    throw error
                 }
                 trojanDialer
             }
-            else -> return ProbeResult.Unavailable("unsupported_type_${node.type}")
+            else -> throw IllegalArgumentException("unsupported_type_${node.type}")
         }
 
-        val start = System.currentTimeMillis()
-        val socket = try {
-            dialer.openTunnel(node, host, port, timeoutMs)
-        } catch (error: Exception) {
-            throw IllegalStateException("stage=open_tunnel: ${error.message}", error)
-        }
+        val socket = dialer.openTunnel(node, host, port, timeoutMs)
         socket.use {
             val request = buildHttpRequest(host, path)
             try {
                 it.output.write(request)
                 it.output.flush()
+                val stageTag = if (node.type.lowercase() in listOf("ss", "shadowsocks")) "SS" else "TROJAN"
+                Log.d(stageTag, "http request sent node=${node.name}")
             } catch (error: Exception) {
-                throw IllegalStateException("stage=http_request: ${error.message}", error)
+                Log.e("PROBE", "http request failed node=${node.name}", error)
+                throw error
             }
             val responseLine = try {
                 readResponseLine(it.input)
             } catch (error: Exception) {
-                throw IllegalStateException("stage=read_response: ${error.message}", error)
-            } ?: return ProbeResult.Unavailable("no_response")
-            val latency = (System.currentTimeMillis() - start).toInt()
+                Log.e("PROBE", "http response read failed node=${node.name}", error)
+                throw error
+            } ?: throw IllegalStateException("no_response")
+            val latency = (SystemClock.elapsedRealtime() - startMs).toInt()
             val code = parseStatusCode(responseLine)
             if (code != null && code in 200..399) {
-                Log.i("NodeProber", "Probe ok ${node.name} code=$code latency=${latency}ms")
+                val stageTag = if (node.type.lowercase() in listOf("ss", "shadowsocks")) "SS" else "TROJAN"
+                Log.d(stageTag, "response received node=${node.name} status=$code")
+                Log.d("PROBE", "success node=${node.name} latency=${latency}ms")
+                Log.d("PERF", "probe cost node=${node.name} latency=${latency}ms")
                 return ProbeResult.Available(latency, code)
             }
-            Log.w("NodeProber", "Probe unavailable ${node.name} response=$responseLine")
-            return ProbeResult.Unavailable("http_${code ?: -1}")
+            val error = IllegalStateException("http_${code ?: -1}")
+            Log.e("PROBE", "unexpected response node=${node.name} response=$responseLine", error)
+            throw error
         }
     }
 
