@@ -6,6 +6,7 @@ import com.example.proxypotps.data.local.TaskEntity
 import com.example.proxypotps.data.local.TaskWithSubTasks
 import com.example.proxypotps.domain.model.SubTaskRequest
 import com.example.proxypotps.domain.model.SubTaskResult
+import com.example.proxypotps.domain.model.JobStatus
 import com.example.proxypotps.domain.model.TaskStatus
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,12 +21,21 @@ class TaskRepository @Inject constructor(
 ) {
     fun observeTasks(): Flow<List<TaskWithSubTasks>> = taskDao.observeTasksWithSubTasks()
 
+    fun observeTask(taskId: Long): Flow<TaskWithSubTasks?> = taskDao.observeTaskWithSubTasks(taskId)
+
     suspend fun createTask(mainTaskId: String, subTasks: List<SubTaskRequest>): TaskCreation {
+        val startTime = System.currentTimeMillis()
         val taskId = taskDao.insertTask(
             TaskEntity(
                 mainTaskId = mainTaskId,
-                startedAt = System.currentTimeMillis(),
-                finishedAt = null,
+                startTime = startTime,
+                endTime = null,
+                totalDuration = null,
+                status = JobStatus.RUNNING.name,
+                successCount = 0,
+                failCount = 0,
+                timeoutCount = 0,
+                nodeUsedCount = 0,
                 totalCount = subTasks.size,
                 completedCount = 0
             )
@@ -39,14 +49,19 @@ class TaskRepository @Inject constructor(
                 paramsJson = json.encodeToJsonElement(request.params).toString(),
                 status = TaskStatus.FAILED.name,
                 nodeName = null,
+                startTime = null,
+                endTime = null,
                 durationMs = null,
+                retryCount = 0,
+                resultSizeBytes = 0,
                 httpCode = null,
-                responseData = null
+                errorMessage = null,
+                responsePreview = null
             )
         }
         val rowIds = taskDao.insertSubTasks(subTaskEntities)
         val mapping = subTasks.mapIndexed { index, subTask -> subTask.subTaskId to rowIds[index] }.toMap()
-        return TaskCreation(taskId = taskId, subTaskRowIds = mapping)
+        return TaskCreation(taskId = taskId, subTaskRowIds = mapping, startTime = startTime)
     }
 
     suspend fun updateSubTaskResult(subTaskRowId: Long, result: SubTaskResult) {
@@ -54,18 +69,44 @@ class TaskRepository @Inject constructor(
             subTaskRowId = subTaskRowId,
             status = result.status.name,
             nodeName = result.nodeName,
+            startTime = result.startTime,
+            endTime = result.endTime,
             durationMs = result.durationMs,
+            retryCount = result.retryCount,
+            resultSizeBytes = result.resultSizeBytes,
             httpCode = result.httpCode,
-            responseData = result.data
+            errorMessage = result.errorMessage,
+            responsePreview = result.responsePreview
         )
     }
 
-    suspend fun updateTaskProgress(taskId: Long, completedCount: Int, finishedAt: Long?) {
-        taskDao.updateTaskProgress(taskId, completedCount, finishedAt)
+    suspend fun updateTaskMetrics(
+        taskId: Long,
+        completedCount: Int,
+        endTime: Long?,
+        totalDuration: Long?,
+        status: JobStatus,
+        successCount: Int,
+        failCount: Int,
+        timeoutCount: Int,
+        nodeUsedCount: Int
+    ) {
+        taskDao.updateTaskMetrics(
+            taskId = taskId,
+            completedCount = completedCount,
+            endTime = endTime,
+            totalDuration = totalDuration,
+            status = status.name,
+            successCount = successCount,
+            failCount = failCount,
+            timeoutCount = timeoutCount,
+            nodeUsedCount = nodeUsedCount
+        )
     }
 }
 
 data class TaskCreation(
     val taskId: Long,
-    val subTaskRowIds: Map<String, Long>
+    val subTaskRowIds: Map<String, Long>,
+    val startTime: Long
 )

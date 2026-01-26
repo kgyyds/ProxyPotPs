@@ -17,7 +17,10 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import com.example.proxypotps.ui.screens.NodesScreen
+import com.example.proxypotps.ui.screens.JobDetailScreen
 import com.example.proxypotps.ui.screens.SettingsScreen
 import com.example.proxypotps.ui.screens.WorkScreen
 
@@ -25,6 +28,10 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Nodes : Screen("nodes", "节点详情", Icons.Filled.Storage)
     data object Work : Screen("work", "工作详情", Icons.AutoMirrored.Filled.List)
     data object Settings : Screen("settings", "设置", Icons.Filled.Settings)
+
+    data object JobDetail : Screen("jobDetail/{taskId}", "工作详情", Icons.AutoMirrored.Filled.List) {
+        fun createRoute(taskId: Long) = "jobDetail/$taskId"
+    }
 }
 
 @Composable
@@ -36,8 +43,16 @@ fun ProxyPotNavHost(modifier: androidx.compose.ui.Modifier = androidx.compose.ui
         startDestination = Screen.Nodes.route
     ) {
         composable(Screen.Nodes.route) { NodesScreen() }
-        composable(Screen.Work.route) { WorkScreen() }
+        composable(Screen.Work.route) {
+            WorkScreen(onJobClick = { taskId -> navController.navigate(Screen.JobDetail.createRoute(taskId)) })
+        }
         composable(Screen.Settings.route) { SettingsScreen() }
+        composable(
+            route = Screen.JobDetail.route,
+            arguments = listOf(navArgument("taskId") { type = NavType.LongType })
+        ) {
+            JobDetailScreen(onBack = { navController.popBackStack() })
+        }
     }
     BottomNavigationBar(navController = navController)
 }
