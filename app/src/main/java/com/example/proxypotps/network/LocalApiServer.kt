@@ -36,61 +36,42 @@ class LocalApiServer @Inject constructor(
 
     private var server: ApplicationEngine? = null
     private var watcherJob: Job? = null
-
-    // ✅ 新增：真正的锁
     private val restartMutex = Mutex()
 
 
-    /**
-     * 启动端口监听器
-     * 根据 settingsFlow 自动热重启 server
-     */
     fun start() {
         if (watcherJob != null) return
 
         watcherJob = scope.launch {
             settingsRepository.settingsFlow
-                .map { settings -> settings.apiPort }      // ✅ 显式类型，避免推断失败
+                .map { it.apiPort }
                 .distinctUntilChanged()
                 .debounce(400)
-                .collectLatest { port: Int ->
+                .collectLatest { port ->
                     safeRestart(port)
                 }
         }
     }
 
 
-    /**
-     * 线程安全重启
-     * IO 线程执行
-     */
     private suspend fun safeRestart(port: Int) {
 
-        if (port !in 1..65535) {
-            Log.e("LocalApiServer", "Invalid port=$port")
-            return
-        }
+        if (port !in 1..65535) return
 
         restartMutex.withLock {
+            withContext(Dispatchers.IO) {
 
-            try {
-                withContext(Dispatchers.IO) {
+                server?.stop(1000, 2000)
 
-                    server?.stop(1000, 2000)
-
-                    server = embeddedServer(
-                        factory = CIO,
-                        port = port,
-                        host = "0.0.0.0", // 允许局域网/Termux访问
-                        module = module(taskDispatcher, json)
-                    ).start(wait = false)
-                }
-
-                Log.i("LocalApiServer", "Server started on port=$port")
-
-            } catch (t: Throwable) {
-                Log.e("LocalApiServer", "Restart failed", t)
+                server = embeddedServer(
+                    CIO,
+                    port = port,
+                    host = "0.0.0.0",
+                    module = module(taskDispatcher, json) // ✅ 直接传
+                ).start(wait = false)
             }
+
+            Log.i("LocalApiServer", "Server started on $port")
         }
     }
 
@@ -104,37 +85,35 @@ class LocalApiServer @Inject constructor(
 
 
     /**
-     * Ktor module
+     * ⭐⭐ 核心修复在这里 ⭐⭐
+     * 只保留一层 lambda
      */
     private fun module(
         taskDispatcher: TaskDispatcher,
         json: Json
     ): Application.() -> Unit = {
 
-        {
-            install(ContentNegotiation) {
-                json(json)
-            }
+        install(ContentNegotiation) {
+            json(json)
+        }
 
-            routing {
+        routing {
 
-                post("/run") {
+            post("/run") {
 
-                    val request = try {
-                        call.receive<RunTaskRequest>()
-                    } catch (e: Exception) {
-                        Log.e("TASK", "invalid request", e)
-                        call.respond(
-                            HttpStatusCode.BadRequest,
-                            mapOf("error" to "invalid_request")
-                        )
-                        return@post
-                    }
-
-                    val response = taskDispatcher.runMainTask(request)
-
-                    call.respond(response)
+                val request = try {
+                    call.receive<RunTaskRequest>()
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "invalid_request")
+                    )
+                    return@post
                 }
+
+                val response = taskDispatcher.runMainTask(request)
+
+                call.respond(response)
             }
         }
     }
