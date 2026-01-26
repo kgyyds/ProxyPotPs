@@ -58,7 +58,8 @@ class LocalApiServer @Inject constructor(
             factory = CIO,
             port = port,
             host = "0.0.0.0",
-            module = { module(taskDispatcher, json) }
+           
+            module = module(taskDispatcher, json)
         ).start(wait = false)
     }
 
