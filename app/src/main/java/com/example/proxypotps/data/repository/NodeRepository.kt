@@ -24,13 +24,18 @@ class NodeRepository @Inject constructor(
 
     suspend fun getNodes(): List<ProxyNode> = nodeDao.getNodes().map { it.toDomain(json) }
 
-    suspend fun replaceNodes(nodes: List<ProxyNode>) {
+    suspend fun replaceNodes(nodes: List<ProxyNode>): List<ProxyNode> {
         nodeDao.clearAll()
         nodeDao.insertAll(nodes.map { it.toEntity(json) })
+        return getNodes()
     }
 
     suspend fun updateStatus(nodeId: Long, status: NodeStatus, latencyMs: Long?) {
         nodeDao.updateStatus(nodeId, status.name, latencyMs)
+    }
+
+    suspend fun updateLocalProxy(nodeId: Long, host: String, port: Int?, type: String) {
+        nodeDao.updateLocalProxy(nodeId, host, port, type)
     }
 }
 
@@ -49,6 +54,9 @@ private fun NodeEntity.toDomain(json: Json): ProxyNode {
         server = server,
         port = port,
         extras = extrasMap,
+        localProxyHost = localProxyHost,
+        localProxyPort = localProxyPort,
+        localProxyType = localProxyType,
         status = parsedStatus,
         latencyMs = latencyMs
     )
@@ -62,6 +70,9 @@ private fun ProxyNode.toEntity(json: Json): NodeEntity {
         type = type,
         server = server,
         port = port,
+        localProxyHost = localProxyHost,
+        localProxyPort = localProxyPort,
+        localProxyType = localProxyType,
         extrasJson = extrasJson,
         status = status.name,
         latencyMs = latencyMs

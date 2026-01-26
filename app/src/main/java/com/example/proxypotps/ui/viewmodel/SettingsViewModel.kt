@@ -24,7 +24,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            AppSettings(9999, "127.0.0.1", 7890, "http://www.gstatic.com/generate_204", "", "current")
+            AppSettings(9999, "http://www.gstatic.com/generate_204", "", "current")
         )
 
     val nodeCountState: StateFlow<NodeCount> = nodeService.observeNodes()
@@ -47,6 +47,12 @@ class SettingsViewModel @Inject constructor(
             val yamlText = settings.value.yamlText
             nodeService.parseAndStore(yamlText)
             nodeService.probeAll()
+        }
+    }
+
+    fun probeDeterministic() {
+        viewModelScope.launch(Dispatchers.IO) {
+            nodeService.probeAllWithUrl("http://www.gstatic.com/generate_204")
         }
     }
 }

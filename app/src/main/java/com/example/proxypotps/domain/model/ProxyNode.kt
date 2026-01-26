@@ -10,6 +10,9 @@ data class ProxyNode(
     val server: String,
     val port: Int,
     val extras: Map<String, String> = emptyMap(),
+    val localProxyHost: String = "127.0.0.1",
+    val localProxyPort: Int? = null,
+    val localProxyType: String = "HTTP",
     val status: NodeStatus = NodeStatus.UNKNOWN,
     val latencyMs: Long? = null
 )

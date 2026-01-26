@@ -11,6 +11,9 @@ data class NodeEntity(
     val type: String,
     val server: String,
     val port: Int,
+    val localProxyHost: String,
+    val localProxyPort: Int?,
+    val localProxyType: String,
     val extrasJson: String,
     val status: String,
     val latencyMs: Long?
