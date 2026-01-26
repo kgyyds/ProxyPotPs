@@ -8,8 +8,14 @@ data class TaskEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val mainTaskId: String,
-    val startedAt: Long,
-    val finishedAt: Long?,
+    val startTime: Long,
+    val endTime: Long?,
+    val totalDuration: Long?,
+    val status: String,
+    val successCount: Int,
+    val failCount: Int,
+    val timeoutCount: Int,
+    val nodeUsedCount: Int,
     val totalCount: Int,
     val completedCount: Int
 )

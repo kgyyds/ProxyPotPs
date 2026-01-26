@@ -26,7 +26,7 @@ fun NodesScreen(viewModel: NodesViewModel = hiltViewModel()) {
 
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = "探测基于当前 Clash 出口（暂不支持节点切换）",
+            text = "探测会使用每个节点的本地代理端口进行访问",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
             modifier = Modifier.padding(16.dp)

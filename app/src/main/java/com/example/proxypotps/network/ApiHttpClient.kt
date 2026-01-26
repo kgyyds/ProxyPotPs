@@ -5,7 +5,6 @@ import com.example.proxypotps.domain.model.HttpMethod
 import com.example.proxypotps.domain.model.SubTaskRequest
 import com.example.proxypotps.domain.model.SubTaskResult
 import com.example.proxypotps.domain.model.TaskStatus
-import java.net.InetSocketAddress
 import java.net.Proxy
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,13 +14,13 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 @Singleton
 class ApiHttpClient @Inject constructor(
-    private val json: Json
+    private val json: Json,
+    private val clientProvider: OkHttpClientProvider
 ) {
     private val mapSerializer = MapSerializer(String.serializer(), String.serializer())
 
@@ -29,25 +28,30 @@ class ApiHttpClient @Inject constructor(
         request: SubTaskRequest,
         proxyHost: String,
         proxyPort: Int,
+        proxyType: Proxy.Type,
         timeoutSeconds: Long
     ): SubTaskResult {
         return withContext(Dispatchers.IO) {
-            val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort))
-            val client = OkHttpClient.Builder()
-                .proxy(proxy)
-                .callTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
-                .build()
+            val client = clientProvider.getClient(proxyType, proxyHost, proxyPort, timeoutSeconds)
             val start = System.currentTimeMillis()
             try {
                 val httpRequest = buildRequest(request)
                 client.newCall(httpRequest).execute().use { response ->
                     val body = response.body?.string()
+                    val end = System.currentTimeMillis()
+                    val preview = body?.take(200)
                     SubTaskResult(
                         subTaskId = request.subTaskId,
                         status = if (response.isSuccessful) TaskStatus.OK else TaskStatus.FAILED,
                         httpCode = response.code,
                         data = body,
-                        durationMs = System.currentTimeMillis() - start
+                        nodeName = null,
+                        startTime = start,
+                        endTime = end,
+                        durationMs = end - start,
+                        resultSizeBytes = body?.toByteArray()?.size?.toLong() ?: 0,
+                        errorMessage = if (response.isSuccessful) null else body,
+                        responsePreview = preview
                     )
                 }
             } catch (throwable: Exception) {
@@ -57,12 +61,19 @@ class ApiHttpClient @Inject constructor(
                 } else {
                     TaskStatus.FAILED
                 }
+                val end = System.currentTimeMillis()
                 SubTaskResult(
                     subTaskId = request.subTaskId,
                     status = status,
                     httpCode = null,
                     data = throwable.message,
-                    durationMs = System.currentTimeMillis() - start
+                    nodeName = null,
+                    startTime = start,
+                    endTime = end,
+                    durationMs = end - start,
+                    resultSizeBytes = 0,
+                    errorMessage = throwable.message,
+                    responsePreview = throwable.message?.take(200)
                 )
             }
         }

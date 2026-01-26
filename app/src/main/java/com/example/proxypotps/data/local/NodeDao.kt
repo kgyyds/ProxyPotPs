@@ -22,4 +22,7 @@ interface NodeDao {
 
     @Query("UPDATE nodes SET status = :status, latencyMs = :latencyMs WHERE id = :id")
     suspend fun updateStatus(id: Long, status: String, latencyMs: Long?)
+
+    @Query("UPDATE nodes SET localProxyHost = :host, localProxyPort = :port, localProxyType = :type WHERE id = :id")
+    suspend fun updateLocalProxy(id: Long, host: String, port: Int?, type: String)
 }
