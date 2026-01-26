@@ -20,7 +20,18 @@ import io.ktor.server.routing.routing
 import io.ktor.server.routing.get
 import javax.inject.Inject
 import javax.inject.Singleton
-
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import com.example.proxypotps.di.ApplicationScope
 
 @Singleton
 class LocalApiServer @Inject constructor(
@@ -34,40 +45,16 @@ class LocalApiServer @Inject constructor(
     private var watcherJob: Job? = null
     private val restartMutex = Mutex()
 
-
     fun start() {
         if (watcherJob != null) return
 
         watcherJob = scope.launch {
             settingsRepository.settingsFlow
-                .map { it.apiPort }
+                .map { settings -> settings.apiPort }
                 .distinctUntilChanged()
-                .debounce(400)
                 .collectLatest { port ->
                     safeRestart(port)
                 }
-        }
-    }
-
-
-    private suspend fun safeRestart(port: Int) {
-
-        if (port !in 1..65535) return
-
-        restartMutex.withLock {
-            withContext(Dispatchers.IO) {
-
-                server?.stop(1000, 2000)
-
-                server = embeddedServer(
-                    CIO,
-                    port = port,
-                    host = "0.0.0.0",
-                    module = module(taskDispatcher, json) // ✅ 直接传
-                ).start(wait = false)
-            }
-
-            Log.i("LocalApiServer", "Server started on $port")
         }
     }
 
@@ -79,22 +66,26 @@ class LocalApiServer @Inject constructor(
         server = null
     }
 
-    private fun restart(port: Int) {
-        if (port !in 1..65535) {
-            Log.e("API", "invalid apiPort=$port, skip restart")
-            return
-        }
-        try {
-            server?.stop(1000, 2000)
-            server = embeddedServer(
-                factory = CIO,
-                port = port,
-                host = "0.0.0.0",
-                module = { module(taskDispatcher, json, port) }
-            ).start(wait = false)
-            Log.i("API", "server started on 0.0.0.0:$port")
-        } catch (error: Exception) {
-            Log.e("API", "server restart failed port=$port", error)
+    private suspend fun safeRestart(port: Int) {
+        restartMutex.withLock {
+            withContext(Dispatchers.IO) {
+                if (port !in 1..65535) {
+                    Log.e("API", "invalid apiPort=$port, skip restart")
+                    return@withContext
+                }
+                try {
+                    server?.stop(1000, 2000)
+                    server = embeddedServer(
+                        factory = CIO,
+                        port = port,
+                        host = "0.0.0.0",
+                        module = { module(taskDispatcher, json, port) }
+                    ).start(wait = false)
+                    Log.i("API", "server started on 0.0.0.0:$port")
+                } catch (error: Exception) {
+                    Log.e("API", "server restart failed port=$port", error)
+                }
+            }
         }
     }
 

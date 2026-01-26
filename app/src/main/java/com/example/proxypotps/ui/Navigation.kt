@@ -21,7 +21,6 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import androidx.navigation.NavType
 import com.example.proxypotps.ui.screens.NodesScreen
 import com.example.proxypotps.ui.screens.JobDetailScreen
 import com.example.proxypotps.ui.screens.SettingsScreen
@@ -52,7 +51,7 @@ fun ProxyPotNavHost(modifier: Modifier = Modifier) {
         composable(Screen.Settings.route) { SettingsScreen() }
         composable(
             route = Screen.JobDetail.route,
-            arguments = listOf(navArgument("taskId") { type = NavType.LongType })
+            arguments = listOf(navArgument("taskId") { type = androidx.navigation.NavType.LongType })
         ) {
             JobDetailScreen(onBack = { navController.popBackStack() })
         }

@@ -106,21 +106,13 @@ LaunchedEffect(settings.apiPort) {
                 Text("保存并解析")
             }
             OutlinedTextField(
-    value = portText,
-    onValueChange = { portText = it.filter { ch -> ch.isDigit() }.take(5) },
-    label = { Text("本地 API 端口") },
-    modifier = Modifier.fillMaxWidth()
-)
-            Button(onClick = {
-    val p = portText.toIntOrNull()
-    if (p != null && p in 1..65535) {
-        viewModel.updateSettings { it.copy(apiPort = p) }
-    } else {
-        // 你也可以 Toast 一下提示端口非法
-    }
-}) {
-    Text("应用端口")
-}
+                value = settings.apiPort.toString(),
+                onValueChange = { value ->
+                    viewModel.updateSettings { it.copy(apiPort = value.toIntOrNull() ?: it.apiPort) }
+                },
+                label = { Text("本地 API 端口") },
+                modifier = Modifier.fillMaxWidth()
+            )
             OutlinedTextField(
                 value = settings.probeUrl,
                 onValueChange = { value -> viewModel.updateSettings { it.copy(probeUrl = value) } },
