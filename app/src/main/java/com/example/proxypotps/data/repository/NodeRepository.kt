@@ -37,6 +37,7 @@ private fun NodeEntity.toDomain(json: Json): ProxyNode {
     val extrasMap = runCatching {
         json.parseToJsonElement(extrasJson).jsonObject.mapValues { it.value.toString().trim('"') }
     }.getOrDefault(emptyMap())
+    val parsedStatus = runCatching { NodeStatus.valueOf(status) }.getOrDefault(NodeStatus.UNKNOWN)
     return ProxyNode(
         id = id,
         name = name,
@@ -44,7 +45,7 @@ private fun NodeEntity.toDomain(json: Json): ProxyNode {
         server = server,
         port = port,
         extras = extrasMap,
-        status = NodeStatus.valueOf(status),
+        status = parsedStatus,
         latencyMs = latencyMs
     )
 }

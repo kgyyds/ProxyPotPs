@@ -16,6 +16,7 @@ data class ProxyNode(
 
 enum class NodeStatus {
     AVAILABLE,
+    TIMEOUT,
     UNAVAILABLE,
     UNKNOWN
 }

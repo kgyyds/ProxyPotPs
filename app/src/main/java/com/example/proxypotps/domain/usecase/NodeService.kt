@@ -1,28 +1,24 @@
 package com.example.proxypotps.domain.usecase
 
+import android.util.Log
 import com.example.proxypotps.data.repository.NodeRepository
 import com.example.proxypotps.data.repository.SettingsRepository
 import com.example.proxypotps.domain.model.NodeStatus
 import com.example.proxypotps.domain.model.ProxyNode
-import com.example.proxypotps.network.ClashProbe
+import com.example.proxypotps.probe.ProbeManager
+import com.example.proxypotps.probe.ProbeNode
+import com.example.proxypotps.probe.ProbeResult
 import com.example.proxypotps.util.YamlParser
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.coroutineScope
 
 @Singleton
 class NodeService @Inject constructor(
     private val nodeRepository: NodeRepository,
     private val settingsRepository: SettingsRepository,
-    private val clashProbe: ClashProbe
+    private val probeManager: ProbeManager
 ) {
     fun observeNodes(): Flow<List<ProxyNode>> = nodeRepository.observeNodes()
 
@@ -34,22 +30,28 @@ class NodeService @Inject constructor(
     suspend fun probeAll(): List<ProxyNode> {
         val settings = settingsRepository.settingsFlow.first()
         val nodes = nodeRepository.getNodes()
-        val semaphore = Semaphore(10)
-        val updated = withContext(Dispatchers.IO) {
-            coroutineScope {
-                nodes.map { node ->
-                    async {
-                        semaphore.withPermit {
-                            clashProbe.probe(node, settings.clashHost, settings.clashPort, settings.probeUrl)
-                        }
-                    }
-                }.awaitAll()
+        val probeNodes = nodes.map { it.toProbeNode() }
+        val results = probeManager.probeAll(probeNodes, settings.probeUrl, 8_000)
+        results.forEach { (probeNode, result) ->
+            val (status, latencyMs) = when (result) {
+                is ProbeResult.Available -> NodeStatus.AVAILABLE to result.latencyMs.toLong()
+                is ProbeResult.Timeout -> NodeStatus.TIMEOUT to null
+                is ProbeResult.Unavailable -> NodeStatus.UNAVAILABLE to null
+            }
+            if (result is ProbeResult.Unavailable) {
+                Log.w("NodeService", "Probe unavailable ${probeNode.name}: ${result.reason}")
+            }
+            nodeRepository.updateStatus(probeNode.id, status, latencyMs)
+        }
+        return nodes.map { node ->
+            val match = results.firstOrNull { it.first.id == node.id }?.second
+            when (match) {
+                is ProbeResult.Available -> node.copy(status = NodeStatus.AVAILABLE, latencyMs = match.latencyMs.toLong())
+                is ProbeResult.Timeout -> node.copy(status = NodeStatus.TIMEOUT, latencyMs = null)
+                is ProbeResult.Unavailable -> node.copy(status = NodeStatus.UNAVAILABLE, latencyMs = null)
+                else -> node
             }
         }
-        updated.forEach { node ->
-            nodeRepository.updateStatus(node.id, node.status, node.latencyMs)
-        }
-        return updated
     }
 
     suspend fun resetStatuses() {
@@ -58,4 +60,21 @@ class NodeService @Inject constructor(
             nodeRepository.updateStatus(node.id, NodeStatus.UNKNOWN, null)
         }
     }
+}
+
+private fun ProxyNode.toProbeNode(): ProbeNode {
+    val grpcServiceName = extras["grpc-service-name"] ?: extras["grpc-opts.grpc-service-name"]
+        ?: extras["grpc-opts"]?.substringAfter("grpc-service-name=")?.substringBefore(",")
+    return ProbeNode(
+        id = id,
+        name = name,
+        type = type,
+        server = server,
+        port = port,
+        cipher = extras["cipher"],
+        password = extras["password"],
+        sni = extras["sni"],
+        network = extras["network"],
+        grpcServiceName = grpcServiceName
+    )
 }

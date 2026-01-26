@@ -66,6 +66,7 @@ fun NodeCard(node: ProxyNode, modifier: Modifier = Modifier) {
                 Text(
                     text = when (node.status) {
                         NodeStatus.AVAILABLE -> "${node.latencyMs ?: 0}"
+                        NodeStatus.TIMEOUT -> "—"
                         NodeStatus.UNAVAILABLE -> "—"
                         NodeStatus.UNKNOWN -> "—"
                     },
@@ -77,6 +78,7 @@ fun NodeCard(node: ProxyNode, modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val statusColor = when (node.status) {
                     NodeStatus.AVAILABLE -> Color(0xFF4CAF50)
+                    NodeStatus.TIMEOUT -> Color(0xFFFF9800)
                     NodeStatus.UNAVAILABLE -> Color(0xFFF44336)
                     NodeStatus.UNKNOWN -> Color(0xFF9E9E9E)
                 }
@@ -89,6 +91,7 @@ fun NodeCard(node: ProxyNode, modifier: Modifier = Modifier) {
                 Text(
                     text = when (node.status) {
                         NodeStatus.AVAILABLE -> "可用"
+                        NodeStatus.TIMEOUT -> "timeout"
                         NodeStatus.UNAVAILABLE -> "不可用"
                         NodeStatus.UNKNOWN -> "待检测"
                     },
