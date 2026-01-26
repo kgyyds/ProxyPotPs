@@ -32,12 +32,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.proxypotps.domain.model.HttpMethod
+import com.example.proxypotps.domain.model.JobStatus
 import com.example.proxypotps.domain.model.SubTaskRequest
-import com.example.proxypotps.domain.model.TaskStatus
 import com.example.proxypotps.ui.viewmodel.WorkViewModel
 import android.util.Log
 import kotlinx.serialization.json.Json
@@ -45,7 +46,10 @@ import kotlinx.serialization.json.jsonObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkScreen(viewModel: WorkViewModel = hiltViewModel()) {
+fun WorkScreen(
+    onJobClick: (Long) -> Unit,
+    viewModel: WorkViewModel = hiltViewModel()
+) {
     val tasks by viewModel.tasks.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
 
@@ -63,7 +67,23 @@ fun WorkScreen(viewModel: WorkViewModel = hiltViewModel()) {
             modifier = Modifier.padding(16.dp)
         ) {
             items(tasks) { taskWithSubTasks ->
+                val status = JobStatus.entries.firstOrNull { it.name == taskWithSubTasks.task.status }
+                    ?: JobStatus.RUNNING
+                val statusColor = when (status) {
+                    JobStatus.SUCCESS -> Color(0xFF2E7D32)
+                    JobStatus.FAILED -> Color(0xFFC62828)
+                    JobStatus.PARTIAL -> Color(0xFFEF6C00)
+                    JobStatus.RUNNING -> MaterialTheme.colorScheme.primary
+                }
+                val totalDuration = taskWithSubTasks.task.totalDuration
+                    ?: (System.currentTimeMillis() - taskWithSubTasks.task.startTime)
+                val successRate = if (taskWithSubTasks.task.totalCount == 0) {
+                    0f
+                } else {
+                    taskWithSubTasks.task.successCount.toFloat() / taskWithSubTasks.task.totalCount.toFloat()
+                }
                 Card(
+                    onClick = { onJobClick(taskWithSubTasks.task.id) },
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -77,39 +97,34 @@ fun WorkScreen(viewModel: WorkViewModel = hiltViewModel()) {
                             style = MaterialTheme.typography.bodySmall
                         )
                         Spacer(modifier = Modifier.size(8.dp))
-                        taskWithSubTasks.subTasks.forEach { subTask ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(text = subTask.subTaskId, fontWeight = FontWeight.Medium)
-                                    Text(
-                                        text = subTask.url,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = "节点: ${subTask.nodeName ?: "-"}",
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    val status = TaskStatus.entries.firstOrNull { it.name == subTask.status } ?: TaskStatus.FAILED
-                                    val statusText = when (status) {
-                                        TaskStatus.OK -> "ok"
-                                        TaskStatus.FAILED -> "failed"
-                                        TaskStatus.TIMEOUT -> "timeout"
-                                    }
-                                    Text(text = statusText)
-                                    Text(
-                                        text = subTask.httpCode?.toString() ?: "-",
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.size(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "耗时 ${totalDuration}ms",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                text = "成功率 ${(successRate * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "成功 ${taskWithSubTasks.task.successCount} / 失败 ${taskWithSubTasks.task.failCount} / 超时 ${taskWithSubTasks.task.timeoutCount}",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                            Text(
+                                text = status.name,
+                                color = statusColor,
+                                style = MaterialTheme.typography.labelLarge
+                            )
                         }
                     }
                 }

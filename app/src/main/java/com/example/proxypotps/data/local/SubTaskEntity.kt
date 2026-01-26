@@ -27,7 +27,12 @@ data class SubTaskEntity(
     val paramsJson: String,
     val status: String,
     val nodeName: String?,
+    val startTime: Long?,
+    val endTime: Long?,
     val durationMs: Long?,
+    val retryCount: Int,
+    val resultSizeBytes: Long,
     val httpCode: Int?,
-    val responseData: String?
+    val errorMessage: String?,
+    val responsePreview: String?
 )

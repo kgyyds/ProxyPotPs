@@ -42,12 +42,20 @@ class ApiHttpClient @Inject constructor(
                 val httpRequest = buildRequest(request)
                 client.newCall(httpRequest).execute().use { response ->
                     val body = response.body?.string()
+                    val end = System.currentTimeMillis()
+                    val preview = body?.take(200)
                     SubTaskResult(
                         subTaskId = request.subTaskId,
                         status = if (response.isSuccessful) TaskStatus.OK else TaskStatus.FAILED,
                         httpCode = response.code,
                         data = body,
-                        durationMs = System.currentTimeMillis() - start
+                        nodeName = null,
+                        startTime = start,
+                        endTime = end,
+                        durationMs = end - start,
+                        resultSizeBytes = body?.toByteArray()?.size?.toLong() ?: 0,
+                        errorMessage = if (response.isSuccessful) null else body,
+                        responsePreview = preview
                     )
                 }
             } catch (throwable: Exception) {
@@ -57,12 +65,19 @@ class ApiHttpClient @Inject constructor(
                 } else {
                     TaskStatus.FAILED
                 }
+                val end = System.currentTimeMillis()
                 SubTaskResult(
                     subTaskId = request.subTaskId,
                     status = status,
                     httpCode = null,
                     data = throwable.message,
-                    durationMs = System.currentTimeMillis() - start
+                    nodeName = null,
+                    startTime = start,
+                    endTime = end,
+                    durationMs = end - start,
+                    resultSizeBytes = 0,
+                    errorMessage = throwable.message,
+                    responsePreview = throwable.message?.take(200)
                 )
             }
         }
