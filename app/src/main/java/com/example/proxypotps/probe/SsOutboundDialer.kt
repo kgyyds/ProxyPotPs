@@ -67,35 +67,30 @@ class SsOutboundDialer @Inject constructor() : OutboundDialer {
                 Log.e("SS", "dst header send failed ${node.name}", error)
                 throw error
             }
+            
+            /////
+            // ✅ 不在这里读 serverSalt！
+// openTunnel 结束时直接返回 tunnel，decryptCipher 在首次 readChunk() 时初始化
 
-            val serverSalt = try {
-                SsAeadTunnel.readFully(input, saltLength) ?: throw IllegalStateException("empty_server_salt")
-            } catch (error: Exception) {
-                Log.e("SS", "serverSalt read failed ${node.name}", error)
-                throw error
-            }
-            Log.d("SS", "serverSalt read ${node.name}")
+val tunnel = SsAeadTunnel(
+    input = input,
+    output = output,
+    cipherName = cipher,
+    masterKey = masterKey,
+    saltLength = saltLength,
+    keyLength = keyLength,
+    encryptCipher = encryptCipher,
+    encryptNonce = encryptNonce,
+    decryptNonce = SsNonce()
+)
 
-            val decryptSubKey = SsCrypto.hkdfSha1(serverSalt, masterKey, "ss-subkey".toByteArray(Charsets.UTF_8), keyLength)
-            val decryptCipher = SsAeadCipher(cipher, decryptSubKey)
+object : SocketLike {
+    override val input = SsTunnelInputStream(tunnel)
+    override val output = SsTunnelOutputStream(tunnel)
+    override fun close() { socket.close() }
+}
 
-            val tunnel = SsAeadTunnel(
-                input = input,
-                output = output,
-                encryptCipher = encryptCipher,
-                decryptCipher = decryptCipher,
-                encryptNonce = encryptNonce,
-                decryptNonce = SsNonce()
-            )
-
-            object : SocketLike {
-                override val input = SsTunnelInputStream(tunnel)
-                override val output = SsTunnelOutputStream(tunnel)
-
-                override fun close() {
-                    socket.close()
-                }
-            }
+            
         }
     }
 

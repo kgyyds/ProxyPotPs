@@ -3,14 +3,39 @@ package com.example.proxypotps.probe
 import java.io.InputStream
 import java.io.OutputStream
 
+
 internal class SsAeadTunnel(
     private val input: InputStream,
     private val output: OutputStream,
+
+    private val cipherName: String,
+    private val masterKey: ByteArray,
+    private val saltLength: Int,
+    private val keyLength: Int,
+
     private val encryptCipher: SsAeadCipher,
-    private val decryptCipher: SsAeadCipher,
+    private var decryptCipher: SsAeadCipher? = null,
+
     private val encryptNonce: SsNonce = SsNonce(),
     private val decryptNonce: SsNonce = SsNonce()
 ) {
+    private var decryptReady = false
+
+    private fun ensureDecryptReady() {
+        if (decryptReady) return
+
+        // ✅ 第一次读取时，先读 serverSalt
+        val serverSalt = readFully(input, saltLength) ?: throw IllegalStateException("empty_server_salt")
+
+        val subKey = SsCrypto.hkdfSha1(
+            serverSalt,
+            masterKey,
+            "ss-subkey".toByteArray(Charsets.UTF_8),
+            keyLength
+        )
+        decryptCipher = SsAeadCipher(cipherName, subKey)
+        decryptReady = true
+    }
 
     fun writeChunk(plaintext: ByteArray) {
         val lengthBytes = byteArrayOf(((plaintext.size ushr 8) and 0xFF).toByte(), (plaintext.size and 0xFF).toByte())
@@ -24,12 +49,16 @@ internal class SsAeadTunnel(
     }
 
     fun readChunk(): ByteArray? {
+        ensureDecryptReady()
+        val cipher = decryptCipher ?: throw IllegalStateException("decrypt_not_ready")
+
         val lengthCipher = readFully(input, 2 + TAG_LENGTH) ?: return null
-        val lengthPlain = decryptCipher.decrypt(decryptNonce.current(), lengthCipher)
+        val lengthPlain = cipher.decrypt(decryptNonce.current(), lengthCipher)
         decryptNonce.increment()
+
         val length = ((lengthPlain[0].toInt() and 0xFF) shl 8) or (lengthPlain[1].toInt() and 0xFF)
         val dataCipher = readFully(input, length + TAG_LENGTH) ?: return null
-        val dataPlain = decryptCipher.decrypt(decryptNonce.current(), dataCipher)
+        val dataPlain = cipher.decrypt(decryptNonce.current(), dataCipher)
         decryptNonce.increment()
         return dataPlain
     }

@@ -13,10 +13,11 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 internal object SsCrypto {
     private val secureRandom = SecureRandom()
 
+    
     init {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(BouncyCastleProvider())
-        }
+    // ✅ Android 自带 BC 是阉割版，必须换成你依赖的 bcprov
+    Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
+    Security.insertProviderAt(BouncyCastleProvider(), 1)
     }
 
     fun deriveKey(password: String, keyLength: Int): ByteArray {
@@ -86,11 +87,11 @@ internal class SsAeadCipher(private val cipherName: String, private val key: Byt
                 cipher
             }
             "chacha20-ietf-poly1305" -> {
-                val cipher = Cipher.getInstance("ChaCha20-Poly1305", BouncyCastleProvider.PROVIDER_NAME)
-                val spec = IvParameterSpec(nonce)
-                cipher.init(mode, SecretKeySpec(key, "ChaCha20"), spec)
-                cipher
-            }
+    val cipher = Cipher.getInstance("ChaCha20-Poly1305")
+    val spec = IvParameterSpec(nonce)
+    cipher.init(mode, SecretKeySpec(key, "ChaCha20"), spec)
+    cipher
+}
             else -> error("Unsupported cipher $cipherName")
         }
     }
