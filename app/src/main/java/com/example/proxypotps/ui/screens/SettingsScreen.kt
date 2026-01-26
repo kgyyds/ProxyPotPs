@@ -1,5 +1,10 @@
 package com.example.proxypotps.ui.screens
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,11 +38,21 @@ import com.example.proxypotps.ui.viewmodel.SettingsViewModel
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+    
     val settings by viewModel.settings.collectAsState()
     val nodeCount by viewModel.nodeCountState.collectAsState()
+    
+    var portText by rememberSaveable { mutableStateOf("") }
+
+LaunchedEffect(settings.apiPort) {
+    portText = settings.apiPort.toString()
+}
+    
     val context = LocalContext.current
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -80,20 +95,28 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(260.dp)
-                        .verticalScroll(yamlScrollState)
+                        
                 )
             }
             Button(onClick = { viewModel.parseAndProbe() }) {
                 Text("保存并解析")
             }
             OutlinedTextField(
-                value = settings.apiPort.toString(),
-                onValueChange = { value ->
-                    viewModel.updateSettings { it.copy(apiPort = value.toIntOrNull() ?: it.apiPort) }
-                },
-                label = { Text("本地 API 端口") },
-                modifier = Modifier.fillMaxWidth()
-            )
+    value = portText,
+    onValueChange = { portText = it.filter { ch -> ch.isDigit() }.take(5) },
+    label = { Text("本地 API 端口") },
+    modifier = Modifier.fillMaxWidth()
+)
+            Button(onClick = {
+    val p = portText.toIntOrNull()
+    if (p != null && p in 1..65535) {
+        viewModel.updateSettings { it.copy(apiPort = p) }
+    } else {
+        // 你也可以 Toast 一下提示端口非法
+    }
+}) {
+    Text("应用端口")
+}
             OutlinedTextField(
                 value = settings.clashHost,
                 onValueChange = { value -> viewModel.updateSettings { it.copy(clashHost = value) } },

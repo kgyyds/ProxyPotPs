@@ -35,14 +35,42 @@ class LocalApiServer @Inject constructor(
 ) {
     private var server: ApplicationEngine? = null
     private var watcherJob: Job? = null
-
     fun start() {
-        if (watcherJob != null) return
-        watcherJob = scope.launch {
-            settingsRepository.settingsFlow.collectLatest { settings ->
-                restart(settings.apiPort)
+    if (watcherJob != null) return
+    watcherJob = scope.launch {
+        settingsRepository.settingsFlow
+            .map { it.apiPort }
+            .distinctUntilChanged()
+            .debounce(400) // ✅ 防止输入时疯狂重启
+            .collectLatest { port ->
+                safeRestart(port)
             }
+    }
+    }
+    private suspend fun safeRestart(port: Int) {
+    // ✅ 端口校验，避免 0 / 负数 / 超范围
+    if (port !in 1..65535) {
+        Log.e("LocalApiServer", "Invalid port=$port, skip restart")
+        return
+    }
+
+    restartMutex.withLock {
+        try {
+            withContext(Dispatchers.IO) {
+                server?.stop(1000, 2000)
+                server = embeddedServer(
+                    factory = CIO,
+                    port = port,
+                    host = "0.0.0.0", // ✅ 让 Termux/局域网能访问
+                    module = { module(taskDispatcher, json) }
+                ).start(wait = false)
+            }
+            Log.i("LocalApiServer", "Server restarted on port=$port")
+        } catch (t: Throwable) {
+            Log.e("LocalApiServer", "Restart failed on port=$port", t)
+            // ✅ 不要让异常冒泡导致闪退
         }
+    }
     }
 
     fun stop() {
