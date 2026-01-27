@@ -11,7 +11,9 @@ import javax.net.ssl.SSLSocket
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 @Singleton
 class TrojanOutboundDialer @Inject constructor() : OutboundDialer {
@@ -23,53 +25,60 @@ class TrojanOutboundDialer @Inject constructor() : OutboundDialer {
     ): SocketLike {
         val password = node.password ?: error("Missing password")
         return withContext(Dispatchers.IO) {
+            val dialStart = System.currentTimeMillis()
+            Log.d("PROBE", "DIAL_OPEN_START nodeId=${node.id} node=${node.name} type=${node.type} host=${node.server}:${node.port}")
             val socket = Socket()
             socket.soTimeout = timeoutMs.toInt()
+            val cancelHandler = coroutineContext.job.invokeOnCompletion { socket.close() }
             try {
                 socket.connect(InetSocketAddress(node.server, node.port), timeoutMs.toInt())
-                Log.d("TROJAN", "tcp connect ok ${node.name} ${node.server}:${node.port}")
-            } catch (error: Exception) {
-                Log.e("TROJAN", "tcp connect failed ${node.name}", error)
-                throw error
-            }
-            val sslContext = SSLContext.getInstance("TLS")
-            sslContext.init(null, null, null)
-            val factory = sslContext.socketFactory
-            val sslSocket = factory.createSocket(socket, node.server, node.port, true) as SSLSocket
-            val params = SSLParameters()
-            val sniHost = node.sni ?: node.server
-            params.serverNames = listOf(SNIHostName(sniHost))
-            sslSocket.sslParameters = params
-            try {
-                sslSocket.startHandshake()
-                Log.d("TROJAN", "tls handshake ok ${node.name}")
-            } catch (error: Exception) {
-                Log.e("TROJAN", "tls handshake failed ${node.name}", error)
-                throw error
-            }
-            sslSocket.soTimeout = timeoutMs.toInt()
+                val elapsed = System.currentTimeMillis() - dialStart
+                Log.d("PROBE", "DIAL_OPEN_OK nodeId=${node.id} node=${node.name} type=${node.type} elapsed=${elapsed}ms")
 
-            val output = sslSocket.outputStream
-            val input = sslSocket.inputStream
-
-            val request = buildTrojanRequest(destHost, destPort)
-            val header = buildTrojanHeader(password, request)
-            try {
-                output.write(header)
-                output.flush()
-                Log.d("TROJAN", "request sent ${node.name} to $destHost:$destPort")
-            } catch (error: Exception) {
-                Log.e("TROJAN", "request send failed ${node.name}", error)
-                throw error
-            }
-
-            object : SocketLike {
-                override val input = input
-                override val output = output
-
-                override fun close() {
-                    sslSocket.close()
+                val sslContext = SSLContext.getInstance("TLS")
+                sslContext.init(null, null, null)
+                val factory = sslContext.socketFactory
+                val sslSocket = factory.createSocket(socket, node.server, node.port, true) as SSLSocket
+                val params = SSLParameters()
+                val sniHost = node.sni ?: node.server
+                params.serverNames = listOf(SNIHostName(sniHost))
+                sslSocket.sslParameters = params
+                try {
+                    sslSocket.startHandshake()
+                    Log.d("TROJAN", "tls handshake ok ${node.name}")
+                } catch (error: Exception) {
+                    Log.e("TROJAN", "tls handshake failed ${node.name}", error)
+                    throw error
                 }
+                sslSocket.soTimeout = timeoutMs.toInt()
+
+                val output = sslSocket.outputStream
+                val input = sslSocket.inputStream
+
+                val request = buildTrojanRequest(destHost, destPort)
+                val header = buildTrojanHeader(password, request)
+                try {
+                    output.write(header)
+                    output.flush()
+                    Log.d("TROJAN", "request sent ${node.name} to $destHost:$destPort")
+                } catch (error: Exception) {
+                    Log.e("TROJAN", "request send failed ${node.name}", error)
+                    throw error
+                }
+
+                object : SocketLike {
+                    override val input = input
+                    override val output = output
+
+                    override fun close() {
+                        sslSocket.close()
+                    }
+                }
+            } catch (error: Exception) {
+                Log.e("PROBE", "DIAL_OPEN_FAIL nodeId=${node.id} node=${node.name} type=${node.type}", error)
+                throw error
+            } finally {
+                cancelHandler.dispose()
             }
         }
     }

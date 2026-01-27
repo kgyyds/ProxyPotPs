@@ -2,6 +2,7 @@ package com.example.proxypotps.data.datastore
 
 import android.content.Context
 import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -23,6 +24,7 @@ class SettingsDataStore @Inject constructor(
         val probeUrl = stringPreferencesKey("probe_url")
         val yamlText = stringPreferencesKey("yaml_text")
         val nodeStrategy = stringPreferencesKey("node_strategy")
+        val verboseProbeLogs = booleanPreferencesKey("verbose_probe_logs")
     }
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -30,7 +32,8 @@ class SettingsDataStore @Inject constructor(
             apiPort = prefs[Keys.apiPort] ?: 9999,
             probeUrl = prefs[Keys.probeUrl] ?: "http://www.gstatic.com/generate_204",
             yamlText = prefs[Keys.yamlText] ?: "",
-            nodeStrategy = prefs[Keys.nodeStrategy] ?: "current"
+            nodeStrategy = prefs[Keys.nodeStrategy] ?: "current",
+            verboseProbeLogs = prefs[Keys.verboseProbeLogs] ?: false
         )
     }
 
@@ -40,13 +43,15 @@ class SettingsDataStore @Inject constructor(
                 apiPort = prefs[Keys.apiPort] ?: 9999,
                 probeUrl = prefs[Keys.probeUrl] ?: "http://www.gstatic.com/generate_204",
                 yamlText = prefs[Keys.yamlText] ?: "",
-                nodeStrategy = prefs[Keys.nodeStrategy] ?: "current"
+                nodeStrategy = prefs[Keys.nodeStrategy] ?: "current",
+                verboseProbeLogs = prefs[Keys.verboseProbeLogs] ?: false
             )
             val next = update(current)
             prefs[Keys.apiPort] = next.apiPort
             prefs[Keys.probeUrl] = next.probeUrl
             prefs[Keys.yamlText] = next.yamlText
             prefs[Keys.nodeStrategy] = next.nodeStrategy
+            prefs[Keys.verboseProbeLogs] = next.verboseProbeLogs
         }
     }
 }
@@ -56,5 +61,6 @@ data class AppSettings(
     val apiPort: Int,
     val probeUrl: String,
     val yamlText: String,
-    val nodeStrategy: String
+    val nodeStrategy: String,
+    val verboseProbeLogs: Boolean
 )
