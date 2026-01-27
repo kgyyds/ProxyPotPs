@@ -17,14 +17,19 @@ class ProbeManager @Inject constructor(
 ) {
     private val semaphore = Semaphore(8)
 
-    suspend fun probeAll(nodes: List<ProbeNode>, probeUrl: String, timeoutMs: Long): List<Pair<ProbeNode, ProbeResult>> {
+    suspend fun probeAll(
+        nodes: List<ProbeNode>,
+        probeUrl: String,
+        timeoutMs: Long,
+        verboseLogs: Boolean = false
+    ): List<Pair<ProbeNode, ProbeResult>> {
         return withContext(Dispatchers.IO) {
             coroutineScope {
                 nodes.map { node ->
                     async {
                         semaphore.withPermit {
                             try {
-                                node to nodeProber.probe(node, probeUrl, timeoutMs)
+                                node to nodeProber.probe(node, probeUrl, timeoutMs, verboseLogs)
                             } catch (error: Exception) {
                                 Log.e("PROBE", "probe failed node=${node.name}", error)
                                 node to ProbeResult.Unavailable(error.message ?: "probe_error")
