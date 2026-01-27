@@ -11,13 +11,19 @@ import java.io.ByteArrayOutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.net.URI
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 class LocalProxyServer(
@@ -39,20 +45,64 @@ class LocalProxyServer(
     val isRunning: Boolean
         get() = running.get() && serverSocket?.isClosed == false
 
+    // ✅ 防止一次探测开太多连接把手机打穿
+    private val connLimit = Semaphore(permits = 32)
+
+    // ✅ header 最大 32KB，避免无限读
+    private val maxHeaderBytes = 32 * 1024
+
+    // ✅ socket 读超时（和你探测超时 8s 对齐）
+    private val socketReadTimeoutMs = 8_000
+
     fun start() {
         if (running.getAndSet(true)) return
-        serverSocket = ServerSocket(0, 50, InetAddress.getByName(host))
-        acceptJob = scope.launch(Dispatchers.IO) {
-            while (running.get()) {
+
+        try {
+            // 1) 同步绑定端口：start() 返回时 port 已经可用
+            serverSocket = ServerSocket(0, 0, InetAddress.getByName("127.0.0.1")).also {
+                it.soTimeout = 1500
+            }
+
+            Log.i("LOCAL_PROXY", "started node=${node.name} port=${serverSocket!!.localPort}")
+
+            // 2) accept loop（IO 线程）
+            acceptJob = scope.launch(Dispatchers.IO) {
                 try {
-                    val client = serverSocket?.accept() ?: break
-                    launch { handleClient(client) }
-                } catch (error: Exception) {
-                    if (running.get()) {
-                        Log.e("LOCAL_PROXY", "accept failed node=${node.name}", error)
+                    while (running.get()) {
+                        val client: Socket? = try {
+                            serverSocket?.accept()
+                        } catch (_: SocketTimeoutException) {
+                            null
+                        }
+
+                        if (client != null) {
+                            // ✅ 每个 client 独立协程处理 + 并发限流
+                            launch(Dispatchers.IO) {
+                                connLimit.withPermit {
+                                    runCatching {
+                                        client.soTimeout = socketReadTimeoutMs
+                                        handleClient(client)
+                                    }.onFailure { t ->
+                                        Log.e("LOCAL_PROXY", "client handler crashed node=${node.name}", t)
+                                    }
+                                }
+                            }
+                        }
                     }
+                } catch (t: Throwable) {
+                    Log.e("LOCAL_PROXY", "accept loop crashed node=${node.name}", t)
+                } finally {
+                    kotlin.runCatching { serverSocket?.close() }
+                    serverSocket = null
+                    running.set(false)
                 }
             }
+        } catch (t: Throwable) {
+            Log.e("LOCAL_PROXY", "start failed node=${node.name}", t)
+            kotlin.runCatching { serverSocket?.close() }
+            serverSocket = null
+            running.set(false)
+            acceptJob = null
         }
     }
 
@@ -60,7 +110,7 @@ class LocalProxyServer(
         running.set(false)
         acceptJob?.cancel()
         acceptJob = null
-        serverSocket?.close()
+        kotlin.runCatching { serverSocket?.close() }
         serverSocket = null
     }
 
@@ -69,44 +119,66 @@ class LocalProxyServer(
             client.use { socket ->
                 val input = BufferedInputStream(socket.getInputStream())
                 val output = BufferedOutputStream(socket.getOutputStream())
+
                 val headerBytes = readHeaders(input)
                 if (headerBytes.isEmpty()) return@withContext
+
                 val headerText = headerBytes.toString(Charsets.UTF_8)
                 val headerLines = headerText.split("\r\n")
                 val requestLine = headerLines.firstOrNull() ?: return@withContext
                 val parts = requestLine.split(" ")
                 if (parts.size < 3) return@withContext
+
                 val method = parts[0].uppercase(Locale.US)
                 val target = parts[1]
+
                 if (method == "CONNECT") {
                     val hostPort = target.split(":")
                     val destHost = hostPort.firstOrNull().orEmpty()
                     val destPort = hostPort.getOrNull(1)?.toIntOrNull() ?: 443
-                    openTunnelAndPipe(destHost, destPort, input, output, headerBytes, isConnect = true)
+                    openTunnelAndPipe(
+                        destHost = destHost,
+                        destPort = destPort,
+                        clientInput = input,
+                        clientOutput = output,
+                        initialPayload = headerBytes,
+                        isConnect = true
+                    )
                 } else {
                     val uri = runCatching { URI(target) }.getOrNull()
                     val destHost = uri?.host ?: extractHostHeader(headerLines)
                     val destPort = uri?.port?.takeIf { it > 0 } ?: 80
+
                     if (destHost.isNullOrBlank()) {
                         Log.e("LOCAL_PROXY", "missing host for node=${node.name}")
                         return@withContext
                     }
+
                     val path = uri?.rawPath?.ifBlank { "/" } ?: "/"
                     val query = uri?.rawQuery?.let { "?$it" }.orEmpty()
                     val newRequestLine = "$method $path$query ${parts[2]}"
+
+                    // 注意：保留原 headers（含 Host）
                     val rewrittenHeaders = headerLines.drop(1)
                         .filter { it.isNotBlank() }
                         .joinToString("\r\n")
+
                     val rebuilt = buildString {
-                        append(newRequestLine)
-                        append("\r\n")
+                        append(newRequestLine).append("\r\n")
                         if (rewrittenHeaders.isNotBlank()) {
-                            append(rewrittenHeaders)
-                            append("\r\n")
+                            append(rewrittenHeaders).append("\r\n")
                         }
                         append("\r\n")
                     }.toByteArray(Charsets.UTF_8)
-                    openTunnelAndPipe(destHost, destPort, input, output, rebuilt, isConnect = false)
+
+                    openTunnelAndPipe(
+                        destHost = destHost,
+                        destPort = destPort,
+                        clientInput = input,
+                        clientOutput = output,
+                        initialPayload = rebuilt,
+                        isConnect = false
+                    )
                 }
             }
         }
@@ -119,17 +191,20 @@ class LocalProxyServer(
         clientOutput: BufferedOutputStream,
         initialPayload: ByteArray,
         isConnect: Boolean
-    ) {
+    ) = coroutineScope {
         val dialer = selectDialer(node)
+
         val tunnel = try {
             dialer.openTunnel(node.toProbeNode(), destHost, destPort, 8_000)
         } catch (error: Exception) {
             Log.e("LOCAL_PROXY", "tunnel failed node=${node.name} host=$destHost:$destPort", error)
-            return
+            return@coroutineScope
         }
+
         tunnel.use { socketLike ->
             val tunnelInput = BufferedInputStream(socketLike.input)
             val tunnelOutput = BufferedOutputStream(socketLike.output)
+
             if (isConnect) {
                 clientOutput.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray())
                 clientOutput.flush()
@@ -137,14 +212,16 @@ class LocalProxyServer(
                 tunnelOutput.write(initialPayload)
                 tunnelOutput.flush()
             }
-            val upstream = scope.launch(Dispatchers.IO) {
-                pipe(clientInput, tunnelOutput)
+
+            val up = async(Dispatchers.IO) { pipe(clientInput, tunnelOutput) }
+            val down = async(Dispatchers.IO) { pipe(tunnelInput, clientOutput) }
+
+            try {
+                awaitAll(up, down)
+            } finally {
+                up.cancel()
+                down.cancel()
             }
-            val downstream = scope.launch(Dispatchers.IO) {
-                pipe(tunnelInput, clientOutput)
-            }
-            upstream.join()
-            downstream.join()
         }
     }
 
@@ -172,12 +249,19 @@ class LocalProxyServer(
         val buffer = ByteArrayOutputStream()
         val lastFour = IntArray(4)
         var index = 0
-        while (true) {
-            val curr = input.read()
+
+        while (buffer.size() < maxHeaderBytes) {
+            val curr = try {
+                input.read()
+            } catch (_: SocketTimeoutException) {
+                break
+            }
             if (curr == -1) break
+
             buffer.write(curr)
             lastFour[index % 4] = curr
             index++
+
             if (index >= 4 &&
                 lastFour[(index - 4) % 4] == '\r'.code &&
                 lastFour[(index - 3) % 4] == '\n'.code &&
@@ -187,23 +271,30 @@ class LocalProxyServer(
                 break
             }
         }
+
         return buffer.toByteArray()
     }
 
     private fun pipe(input: BufferedInputStream, output: BufferedOutputStream) {
         val buffer = ByteArray(8 * 1024)
         while (true) {
-            val read = input.read(buffer)
+            val read = try {
+                input.read(buffer)
+            } catch (_: SocketTimeoutException) {
+                break
+            }
             if (read <= 0) break
             output.write(buffer, 0, read)
-            output.flush()
         }
+        kotlin.runCatching { output.flush() }
     }
 }
 
 private fun ProxyNode.toProbeNode(): com.example.proxypotps.probe.ProbeNode {
-    val grpcServiceName = extras["grpc-service-name"] ?: extras["grpc-opts.grpc-service-name"]
+    val grpcServiceName = extras["grpc-service-name"]
+        ?: extras["grpc-opts.grpc-service-name"]
         ?: extras["grpc-opts"]?.substringAfter("grpc-service-name=")?.substringBefore(",")
+
     return com.example.proxypotps.probe.ProbeNode(
         id = id,
         name = name,
