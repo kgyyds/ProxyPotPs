@@ -44,21 +44,35 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 @Composable
 fun ProxyPotNavHost(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
-    NavHost(
-        modifier = modifier,
-        navController = navController,
-        startDestination = Screen.Nodes.route
-    ) {
-        composable(Screen.Nodes.route) { NodesScreen() }
-        composable(Screen.Work.route) {
-            WorkScreen(onJobClick = { taskId -> navController.navigate(Screen.JobDetail.createRoute(taskId)) })
-        }
-        composable(Screen.Settings.route) { SettingsScreen() }
-        composable(
-            route = Screen.JobDetail.route,
-            arguments = listOf(navArgument("taskId") { type = androidx.navigation.NavType.LongType })
+
+    Scaffold(
+        bottomBar = { BottomNavigationBar(navController) }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Nodes.route,
+            modifier = modifier
+                .fillMaxSize()
+                .padding(innerPadding) // ⭐关键：避免内容盖住底栏
         ) {
-            JobDetailScreen(onBack = { navController.popBackStack() })
+            composable(Screen.Nodes.route) { NodesScreen() }
+
+            composable(Screen.Work.route) {
+                WorkScreen(
+                    onJobClick = { taskId ->
+                        navController.navigate(Screen.JobDetail.createRoute(taskId))
+                    }
+                )
+            }
+
+            composable(Screen.Settings.route) { SettingsScreen() }
+
+            composable(
+                route = Screen.JobDetail.route,
+                arguments = listOf(navArgument("taskId") { type = NavType.LongType })
+            ) {
+                JobDetailScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }
