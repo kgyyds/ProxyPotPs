@@ -31,14 +31,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import com.example.proxypotps.di.ApplicationScope
+
 
 @Singleton
 class LocalApiServer @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val taskDispatcher: TaskDispatcher,
     private val json: Json,
-    @ApplicationScope private val scope: CoroutineScope
+    @com.example.proxypotps.di.ApplicationScope
+private val scope: CoroutineScope
+   
 ) {
 
     private var server: ApplicationEngine? = null
