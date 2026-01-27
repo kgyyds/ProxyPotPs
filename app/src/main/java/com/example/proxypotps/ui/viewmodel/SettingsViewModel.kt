@@ -51,9 +51,8 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun parseAndProbe() {
+    fun parseAndProbe(yamlText: String = settings.value.yamlText) {
         startProbe {
-            val yamlText = settings.value.yamlText
             nodeService.parseAndStore(yamlText)
             nodeService.probeAllWithUrl(
                 probeUrl = settings.value.probeUrl,
@@ -95,6 +94,9 @@ class SettingsViewModel @Inject constructor(
             updateProgress(ProbeProgress(inProgress = true))
             try {
                 block()
+            } catch (error: Exception) {
+                updateProgress(ProbeProgress(inProgress = false))
+                android.util.Log.e("PROBE", "probe task failed", error)
             } finally {
                 probeProgressState.update { it.copy(inProgress = false) }
             }

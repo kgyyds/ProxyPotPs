@@ -65,7 +65,7 @@ LaunchedEffect(settings.apiPort) {
                 BufferedReader(InputStreamReader(inputStream)).readText()
             } ?: ""
             viewModel.updateSettings { current -> current.copy(yamlText = content) }
-            viewModel.parseAndProbe()
+            viewModel.parseAndProbe(content)
         }
     }
 
@@ -102,7 +102,7 @@ LaunchedEffect(settings.apiPort) {
                     Text("从文件导入")
                 }
                 Spacer(modifier = Modifier.size(8.dp))
-                TextButton(onClick = { viewModel.parseAndProbe() }) {
+                TextButton(onClick = { viewModel.parseAndProbe(settings.yamlText) }) {
                     Text("重新解析/重新测速")
                 }
                 Spacer(modifier = Modifier.size(8.dp))
@@ -137,7 +137,7 @@ LaunchedEffect(settings.apiPort) {
                         
                 )
             }
-            Button(onClick = { viewModel.parseAndProbe() }) {
+            Button(onClick = { viewModel.parseAndProbe(settings.yamlText) }) {
                 Text("保存并解析")
             }
             OutlinedTextField(

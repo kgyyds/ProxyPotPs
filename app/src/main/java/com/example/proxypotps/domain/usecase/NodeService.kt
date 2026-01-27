@@ -54,6 +54,11 @@ class NodeService @Inject constructor(
         onProgress: (ProbeProgress) -> Unit = {}
     ): List<ProxyNode> {
         val nodes = nodeRepository.getNodes()
+        Log.i("PROBE", "probeAllWithUrl start count=${nodes.size} url=$probeUrl")
+        if (nodes.isEmpty()) {
+            onProgress(ProbeProgress(total = 0, completed = 0, inProgress = false))
+            return emptyList()
+        }
         val proxiedNodes = localProxyManager.ensureProxies(nodes)
         proxiedNodes.forEach { node ->
             nodeRepository.updateLocalProxy(node.id, node.localProxyHost, node.localProxyPort, node.localProxyType)
