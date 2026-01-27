@@ -20,8 +20,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -46,6 +48,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     
     val settings by viewModel.settings.collectAsState()
     val nodeCount by viewModel.nodeCountState.collectAsState()
+    val probeProgress by viewModel.probeProgress.collectAsState()
     
     var portText by rememberSaveable { mutableStateOf("") }
 
@@ -62,7 +65,7 @@ LaunchedEffect(settings.apiPort) {
                 BufferedReader(InputStreamReader(inputStream)).readText()
             } ?: ""
             viewModel.updateSettings { current -> current.copy(yamlText = content) }
-            viewModel.parseAndProbe()
+            viewModel.parseAndProbe(content)
         }
     }
 
@@ -76,18 +79,50 @@ LaunchedEffect(settings.apiPort) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(text = "节点统计: ${nodeCount.total} 个 / 可用 ${nodeCount.available} 个")
+            if (probeProgress.total > 0) {
+                val progressText = "${probeProgress.completed}/${probeProgress.total}"
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "探测进度: $progressText")
+                    Spacer(modifier = Modifier.size(8.dp))
+                    if (probeProgress.inProgress) {
+                        TextButton(onClick = { viewModel.cancelProbe() }) {
+                            Text("取消")
+                        }
+                    }
+                }
+                if (probeProgress.inProgress) {
+                    LinearProgressIndicator(
+                        progress = { probeProgress.completed.toFloat() / probeProgress.total.coerceAtLeast(1) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = { filePicker.launch(arrayOf("*/*")) }) {
                     Text("从文件导入")
                 }
                 Spacer(modifier = Modifier.size(8.dp))
-                TextButton(onClick = { viewModel.parseAndProbe() }) {
+                TextButton(onClick = { viewModel.parseAndProbe(settings.yamlText) }) {
                     Text("重新解析/重新测速")
                 }
                 Spacer(modifier = Modifier.size(8.dp))
                 TextButton(onClick = { viewModel.probeDeterministic() }) {
                     Text("固定 URL 测试")
                 }
+                Spacer(modifier = Modifier.size(8.dp))
+                TextButton(onClick = { viewModel.probeDiagnostics() }) {
+                    Text("诊断探测")
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = settings.verboseProbeLogs,
+                    onCheckedChange = { value ->
+                        viewModel.updateSettings { it.copy(verboseProbeLogs = value) }
+                    }
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(text = "详细探测日志")
             }
             Column {
                 Text(text = "节点配置 YAML", style = MaterialTheme.typography.labelMedium)
@@ -102,7 +137,7 @@ LaunchedEffect(settings.apiPort) {
                         
                 )
             }
-            Button(onClick = { viewModel.parseAndProbe() }) {
+            Button(onClick = { viewModel.parseAndProbe(settings.yamlText) }) {
                 Text("保存并解析")
             }
             OutlinedTextField(
