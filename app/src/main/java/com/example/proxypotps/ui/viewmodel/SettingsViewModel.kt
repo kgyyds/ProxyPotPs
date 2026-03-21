@@ -31,7 +31,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            AppSettings(9999, "http://www.gstatic.com/generate_204", "", "current", false)
+            AppSettings("http://www.gstatic.com/generate_204", "", "current", false)
         )
 
     val nodeCountState: StateFlow<NodeCount> = nodeService.observeNodes()

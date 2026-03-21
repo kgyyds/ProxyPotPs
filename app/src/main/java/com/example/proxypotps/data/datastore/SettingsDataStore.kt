@@ -20,7 +20,6 @@ class SettingsDataStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private object Keys {
-        val apiPort = intPreferencesKey("api_port")
         val probeUrl = stringPreferencesKey("probe_url")
         val yamlText = stringPreferencesKey("yaml_text")
         val nodeStrategy = stringPreferencesKey("node_strategy")
@@ -29,7 +28,6 @@ class SettingsDataStore @Inject constructor(
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
-            apiPort = prefs[Keys.apiPort] ?: 9999,
             probeUrl = prefs[Keys.probeUrl] ?: "http://www.gstatic.com/generate_204",
             yamlText = prefs[Keys.yamlText] ?: "",
             nodeStrategy = prefs[Keys.nodeStrategy] ?: "current",
@@ -40,14 +38,12 @@ class SettingsDataStore @Inject constructor(
     suspend fun updateSettings(update: (AppSettings) -> AppSettings) {
         context.dataStore.edit { prefs: MutablePreferences ->
             val current = AppSettings(
-                apiPort = prefs[Keys.apiPort] ?: 9999,
                 probeUrl = prefs[Keys.probeUrl] ?: "http://www.gstatic.com/generate_204",
                 yamlText = prefs[Keys.yamlText] ?: "",
                 nodeStrategy = prefs[Keys.nodeStrategy] ?: "current",
                 verboseProbeLogs = prefs[Keys.verboseProbeLogs] ?: false
             )
             val next = update(current)
-            prefs[Keys.apiPort] = next.apiPort
             prefs[Keys.probeUrl] = next.probeUrl
             prefs[Keys.yamlText] = next.yamlText
             prefs[Keys.nodeStrategy] = next.nodeStrategy
@@ -58,7 +54,6 @@ class SettingsDataStore @Inject constructor(
 
 
 data class AppSettings(
-    val apiPort: Int,
     val probeUrl: String,
     val yamlText: String,
     val nodeStrategy: String,

@@ -45,16 +45,10 @@ import java.io.InputStreamReader
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
-    
+
     val settings by viewModel.settings.collectAsState()
     val nodeCount by viewModel.nodeCountState.collectAsState()
     val probeProgress by viewModel.probeProgress.collectAsState()
-    
-    var portText by rememberSaveable { mutableStateOf("") }
-
-LaunchedEffect(settings.apiPort) {
-    portText = settings.apiPort.toString()
-}
     
     val context = LocalContext.current
     val filePicker = rememberLauncherForActivityResult(
@@ -140,14 +134,6 @@ LaunchedEffect(settings.apiPort) {
             Button(onClick = { viewModel.parseAndProbe(settings.yamlText) }) {
                 Text("保存并解析")
             }
-            OutlinedTextField(
-                value = settings.apiPort.toString(),
-                onValueChange = { value ->
-                    viewModel.updateSettings { it.copy(apiPort = value.toIntOrNull() ?: it.apiPort) }
-                },
-                label = { Text("本地 API 端口") },
-                modifier = Modifier.fillMaxWidth()
-            )
             OutlinedTextField(
                 value = settings.probeUrl,
                 onValueChange = { value -> viewModel.updateSettings { it.copy(probeUrl = value) } },
