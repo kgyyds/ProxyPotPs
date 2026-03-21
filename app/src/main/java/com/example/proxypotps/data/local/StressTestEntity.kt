@@ -8,7 +8,9 @@ import com.example.proxypotps.domain.model.StressTestType
 
 @Entity(tableName = "stress_tests")
 data class StressTestEntity(
-    @PrimaryKey val testId: String,
+    @PrimaryKey
+    @ColumnInfo(name = "test_id")
+    val testId: String,
     @ColumnInfo(name = "test_name") val testName: String,
     @ColumnInfo(name = "target_type") val targetType: String,
     @ColumnInfo(name = "target_url") val targetUrl: String,

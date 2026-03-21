@@ -6,6 +6,7 @@ import com.example.proxypotps.data.local.AppDatabase
 import com.example.proxypotps.data.local.NodeDao
 import com.example.proxypotps.data.local.TaskDao
 import com.example.proxypotps.data.local.StressTestDao
+import com.example.proxypotps.data.local.MIGRATION_3_4
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,6 +26,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "proxypot.db")
+            .addMigrations(MIGRATION_3_4)
             .fallbackToDestructiveMigration()
             .build()
     }
