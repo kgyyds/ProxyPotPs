@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.example.proxypotps.data.local.AppDatabase
 import com.example.proxypotps.data.local.NodeDao
 import com.example.proxypotps.data.local.TaskDao
+import com.example.proxypotps.data.local.StressTestDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -33,6 +34,9 @@ object AppModule {
 
     @Provides
     fun provideTaskDao(database: AppDatabase): TaskDao = database.taskDao()
+    
+    @Provides
+    fun provideStressTestDao(database: AppDatabase): StressTestDao = database.stressTestDao()
 
     @Provides
     @Singleton

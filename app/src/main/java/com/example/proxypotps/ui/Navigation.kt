@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Speed
 //test
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -30,15 +31,20 @@ import com.example.proxypotps.ui.screens.NodesScreen
 import com.example.proxypotps.ui.screens.JobDetailScreen
 import com.example.proxypotps.ui.screens.SettingsScreen
 import com.example.proxypotps.ui.screens.WorkScreen
+import com.example.proxypotps.ui.screens.StressTestListScreen
+import com.example.proxypotps.ui.screens.SlowLorisTestScreen
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     data object Nodes : Screen("nodes", "节点详情", Icons.Filled.Storage)
     data object Work : Screen("work", "工作详情", Icons.AutoMirrored.Filled.List)
+    data object StressTest : Screen("stress_test", "压测", Icons.Filled.Speed)
     data object Settings : Screen("settings", "设置", Icons.Filled.Settings)
 
     data object JobDetail : Screen("jobDetail/{taskId}", "工作详情", Icons.AutoMirrored.Filled.List) {
         fun createRoute(taskId: Long) = "jobDetail/$taskId"
     }
+    
+    data object SlowLorisTest : Screen("slow_loris_test", "慢连接压测", Icons.Filled.Speed)
 }
 
 @Composable
@@ -65,6 +71,14 @@ fun ProxyPotNavHost(modifier: Modifier = Modifier) {
                 )
             }
 
+            composable(Screen.StressTest.route) {
+                StressTestListScreen(navController = navController)
+            }
+            
+            composable(Screen.SlowLorisTest.route) {
+                SlowLorisTestScreen(onBack = { navController.popBackStack() })
+            }
+
             composable(Screen.Settings.route) { SettingsScreen() }
 
             composable(
@@ -79,7 +93,7 @@ fun ProxyPotNavHost(modifier: Modifier = Modifier) {
 
 @Composable
 fun BottomNavigationBar(navController: NavHostController) {
-    val items = listOf(Screen.Nodes, Screen.Work, Screen.Settings)
+    val items = listOf(Screen.Nodes, Screen.Work, Screen.StressTest, Screen.Settings)
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -90,6 +104,9 @@ fun BottomNavigationBar(navController: NavHostController) {
                 Screen.Work ->
                     currentRoute == Screen.Work.route ||
                         (currentRoute?.startsWith("jobDetail/") == true)
+                Screen.StressTest ->
+                    currentRoute == Screen.StressTest.route ||
+                        currentRoute == Screen.SlowLorisTest.route
                 else -> currentRoute == screen.route
             }
 

@@ -14,7 +14,8 @@ data class SubTaskRequest(
     val subTaskId: String,
     val url: String,
     val method: HttpMethod = HttpMethod.GET,
-    val params: Map<String, String> = emptyMap()
+    val params: Map<String, String> = emptyMap(),
+    val taskType: TaskType = TaskType.NORMAL
 )
 
 @Serializable
@@ -36,7 +37,14 @@ data class SubTaskResult(
     val retryCount: Int = 0,
     val resultSizeBytes: Long = 0,
     val errorMessage: String? = null,
-    val responsePreview: String? = null
+    val responsePreview: String? = null,
+    val taskType: TaskType = TaskType.NORMAL,
+    // Stress test specific fields
+    val activeConnections: Int? = null,
+    val totalConnections: Int? = null,
+    val successfulConnections: Int? = null,
+    val failedConnections: Int? = null,
+    val timeoutConnections: Int? = null
 )
 
 @Serializable
@@ -68,4 +76,13 @@ enum class SubTaskStatus {
     SUCCESS,
     FAIL,
     TIMEOUT
+}
+
+@Serializable
+enum class TaskType {
+    @SerialName("normal")
+    NORMAL,
+    
+    @SerialName("stress_test")
+    STRESS_TEST
 }
