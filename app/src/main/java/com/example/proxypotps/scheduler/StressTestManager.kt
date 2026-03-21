@@ -97,45 +97,47 @@ class StressTestManager @Inject constructor(
                 Log.d("STRESS_TEST", "Starting round $currentRound for test: ${config.testId}")
                 
                 // Launch attacks for each node
-                val nodeResults = nodes.map { node ->
-                    async {
-                        try {
-                            val proxyHost = node.localProxyHost
-                            val proxyPort = node.localProxyPort ?: error("Missing proxy port for node=${node.name}")
-                            val proxyType = when (node.localProxyType.uppercase()) {
-                                "SOCKS" -> Proxy.Type.SOCKS
-                                else -> Proxy.Type.HTTP
+                val nodeResults = coroutineScope {
+                    nodes.map { node ->
+                        async {
+                            try {
+                                val proxyHost = node.localProxyHost
+                                val proxyPort = node.localProxyPort ?: error("Missing proxy port for node=${node.name}")
+                                val proxyType = when (node.localProxyType.uppercase()) {
+                                    "SOCKS" -> Proxy.Type.SOCKS
+                                    else -> Proxy.Type.HTTP
+                                }
+
+                                val attack = SlowLorisAttack(
+                                    config = config,
+                                    httpClient = apiHttpClient,
+                                    proxyHost = proxyHost,
+                                    proxyPort = proxyPort,
+                                    proxyType = proxyType,
+                                    nodeId = node.id,
+                                    nodeName = node.name
+                                )
+
+                                attack.execute(currentRound)
+                            } catch (e: Exception) {
+                                Log.e("STRESS_TEST", "Attack failed for node ${node.name}", e)
+                                StressTestResult(
+                                    testId = config.testId,
+                                    nodeId = node.id,
+                                    nodeName = node.name,
+                                    round = currentRound,
+                                    activeConnections = 0,
+                                    totalConnections = 0,
+                                    successfulConnections = 0,
+                                    failedConnections = 1,
+                                    timeoutConnections = 0,
+                                    responseCodeDistribution = emptyMap(),
+                                    avgConnectionTimeMs = 0,
+                                    startTime = System.currentTimeMillis(),
+                                    endTime = System.currentTimeMillis(),
+                                    status = StressTestStatus.FAILED
+                                )
                             }
-                            
-                            val attack = SlowLorisAttack(
-                                config = config,
-                                httpClient = apiHttpClient,
-                                proxyHost = proxyHost,
-                                proxyPort = proxyPort,
-                                proxyType = proxyType,
-                                nodeId = node.id,
-                                nodeName = node.name
-                            )
-                            
-                            attack.execute(currentRound)
-                        } catch (e: Exception) {
-                            Log.e("STRESS_TEST", "Attack failed for node ${node.name}", e)
-                            StressTestResult(
-                                testId = config.testId,
-                                nodeId = node.id,
-                                nodeName = node.name,
-                                round = currentRound,
-                                activeConnections = 0,
-                                totalConnections = 0,
-                                successfulConnections = 0,
-                                failedConnections = 1,
-                                timeoutConnections = 0,
-                                responseCodeDistribution = emptyMap(),
-                                avgConnectionTimeMs = 0,
-                                startTime = System.currentTimeMillis(),
-                                endTime = System.currentTimeMillis(),
-                                status = StressTestStatus.FAILED
-                            )
                         }
                     }
                 }
