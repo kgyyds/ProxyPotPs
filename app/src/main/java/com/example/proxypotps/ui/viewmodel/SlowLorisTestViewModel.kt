@@ -95,7 +95,10 @@ class SlowLorisTestViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         currentTestJob?.cancel()
-        currentTestId?.let { stressTestManager.stopStressTest(it) }
+        _testState.value = _testState.value.copy(
+            isRunning = false,
+            status = StressTestStatus.CANCELLED
+        )
     }
     
     data class TestState(

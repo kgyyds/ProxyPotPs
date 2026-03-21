@@ -4,10 +4,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -53,7 +55,10 @@ fun StressTestListScreen(
                                 com.example.proxypotps.domain.model.StressTestType.SLOW_LORIS -> {
                                     navController.navigate("slow_loris_test")
                                 }
-                                // Add more cases for other stress test types
+                                com.example.proxypotps.domain.model.StressTestType.HTTP_FLOOD,
+                                com.example.proxypotps.domain.model.StressTestType.POST_FLOOD -> {
+                                    // TODO: add destinations for these stress tests
+                                }
                             }
                         }
                     )
@@ -70,9 +75,9 @@ private fun StressTestCard(
 ) {
     Card(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .clickable { onClick() },
-        colors = MaterialTheme.colorScheme.cardColors()
+        colors = CardDefaults.cardColors()
     ) {
         Column(
             modifier = Modifier.padding(16.dp)

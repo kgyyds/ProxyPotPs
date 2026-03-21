@@ -11,19 +11,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -50,8 +55,11 @@ fun SlowLorisTestScreen(
             TopAppBar(
                 title = { Text("慢连接压测") },
                 navigationIcon = {
-                    androidx.compose.material3.IconButton(onClick = onBack) {
-                        androidx.compose.material.icons.Icons.Default.ArrowBack
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = "返回"
+                        )
                     }
                 }
             )
@@ -168,6 +176,8 @@ private fun TestExecutionView(
     testState: SlowLorisTestViewModel.TestState,
     onStopTest: () -> Unit
 ) {
+    val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -251,7 +261,7 @@ private fun TestExecutionView(
                         .fillMaxWidth()
                         .height(150.dp)
                 ) {
-                    drawRect(color = MaterialTheme.colorScheme.surfaceVariant)
+                    drawRect(color = surfaceVariantColor)
                 }
             }
         }
@@ -311,7 +321,7 @@ private fun TestExecutionView(
                         .fillMaxWidth()
                         .height(200.dp)
                 ) {
-                    drawRect(color = MaterialTheme.colorScheme.surfaceVariant)
+                    drawRect(color = surfaceVariantColor)
                 }
             }
         }
@@ -319,8 +329,10 @@ private fun TestExecutionView(
         Button(
             onClick = onStopTest,
             modifier = Modifier.fillMaxWidth(),
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            )
         ) {
             Text("停止压测")
         }
