@@ -6,6 +6,7 @@ import com.example.proxypotps.domain.model.NodeStatus
 import com.example.proxypotps.domain.model.ProxyNode
 import com.example.proxypotps.network.LocalProxyManager
 import com.example.proxypotps.network.LocalProxyProbe
+import com.example.proxypotps.network.protocolSupportIssue
 import com.example.proxypotps.util.YamlParser
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,15 +33,17 @@ class NodeService @Inject constructor(
 ) {
     fun observeNodes(): Flow<List<ProxyNode>> = nodeRepository.observeNodes()
 
-    suspend fun parseAndStore(yamlText: String) {
+    suspend fun parseAndStore(yamlText: String): ImportSummary {
         val nodes = withContext(Dispatchers.IO) {
             YamlParser.parseProxyNodes(yamlText)
         }
+        val unsupportedCount = nodes.count { it.protocolSupportIssue() != null }
         val storedNodes = nodeRepository.replaceNodes(nodes)
         val withProxies = localProxyManager.ensureProxies(storedNodes)
         withProxies.forEach { node ->
             nodeRepository.updateLocalProxy(node.id, node.localProxyHost, node.localProxyPort, node.localProxyType)
         }
+        return ImportSummary(total = storedNodes.size, unsupported = unsupportedCount)
     }
 
     suspend fun probeAll(): List<ProxyNode> {
@@ -64,7 +67,7 @@ class NodeService @Inject constructor(
             nodeRepository.updateLocalProxy(node.id, node.localProxyHost, node.localProxyPort, node.localProxyType)
         }
         proxiedNodes.forEach { node ->
-            nodeRepository.updateStatus(node.id, NodeStatus.PROBING, null)
+            nodeRepository.updateStatus(node.id, NodeStatus.PROBING, null, null)
         }
         val total = proxiedNodes.size
         val completed = AtomicInteger(0)
@@ -76,7 +79,7 @@ class NodeService @Inject constructor(
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             val result = localProxyProbe.probe(node, probeUrl, 8, verboseLogs)
-                            nodeRepository.updateStatus(result.id, result.status, result.latencyMs)
+                            nodeRepository.updateStatus(result.id, result.status, result.latencyMs, result.statusReason)
                             val done = completed.incrementAndGet()
                             onProgress(ProbeProgress(total = total, completed = done, inProgress = true))
                             result
@@ -124,7 +127,7 @@ class NodeService @Inject constructor(
     suspend fun resetStatuses() {
         val nodes = nodeRepository.getNodes()
         nodes.forEach { node ->
-            nodeRepository.updateStatus(node.id, NodeStatus.UNKNOWN, null)
+            nodeRepository.updateStatus(node.id, NodeStatus.UNKNOWN, null, null)
         }
     }
 
@@ -139,9 +142,9 @@ class NodeService @Inject constructor(
         val proxiedNodes = localProxyManager.ensureProxies(listOf(node))
         val proxiedNode = proxiedNodes.first()
         nodeRepository.updateLocalProxy(proxiedNode.id, proxiedNode.localProxyHost, proxiedNode.localProxyPort, proxiedNode.localProxyType)
-        nodeRepository.updateStatus(proxiedNode.id, NodeStatus.PROBING, null)
+        nodeRepository.updateStatus(proxiedNode.id, NodeStatus.PROBING, null, null)
         val result = localProxyProbe.probe(proxiedNode, probeUrl, 8, verboseLogs)
-        nodeRepository.updateStatus(result.id, result.status, result.latencyMs)
+        nodeRepository.updateStatus(result.id, result.status, result.latencyMs, result.statusReason)
         Log.i("PROBE", "probeNode done nodeId=$nodeId node=${result.name} status=${result.status} latency=${result.latencyMs}")
         return result
     }
@@ -149,10 +152,15 @@ class NodeService @Inject constructor(
     private suspend fun restorePendingStatuses() {
         val nodes = nodeRepository.getNodes()
         nodes.filter { it.status == NodeStatus.PROBING }.forEach { node ->
-            nodeRepository.updateStatus(node.id, NodeStatus.UNKNOWN, null)
+            nodeRepository.updateStatus(node.id, NodeStatus.UNKNOWN, null, null)
         }
     }
 }
+
+data class ImportSummary(
+    val total: Int,
+    val unsupported: Int
+)
 
 data class ProbeProgress(
     val total: Int = 0,

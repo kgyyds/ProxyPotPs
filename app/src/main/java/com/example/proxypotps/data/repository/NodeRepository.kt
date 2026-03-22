@@ -30,8 +30,8 @@ class NodeRepository @Inject constructor(
         return getNodes()
     }
 
-    suspend fun updateStatus(nodeId: Long, status: NodeStatus, latencyMs: Long?) {
-        nodeDao.updateStatus(nodeId, status.name, latencyMs)
+    suspend fun updateStatus(nodeId: Long, status: NodeStatus, latencyMs: Long?, statusReason: String? = null) {
+        nodeDao.updateStatus(nodeId, status.name, latencyMs, statusReason)
     }
 
     suspend fun updateLocalProxy(nodeId: Long, host: String, port: Int?, type: String) {
@@ -62,7 +62,8 @@ private fun NodeEntity.toDomain(json: Json): ProxyNode {
         localProxyPort = localProxyPort,
         localProxyType = localProxyType,
         status = parsedStatus,
-        latencyMs = latencyMs
+        latencyMs = latencyMs,
+        statusReason = statusReason
     )
 }
 
@@ -79,6 +80,7 @@ private fun ProxyNode.toEntity(json: Json): NodeEntity {
         localProxyType = localProxyType,
         extrasJson = extrasJson,
         status = status.name,
-        latencyMs = latencyMs
+        latencyMs = latencyMs,
+        statusReason = statusReason
     )
 }

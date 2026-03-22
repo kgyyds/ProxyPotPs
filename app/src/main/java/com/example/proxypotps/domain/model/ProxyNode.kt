@@ -14,7 +14,8 @@ data class ProxyNode(
     val localProxyPort: Int? = null,
     val localProxyType: String = "HTTP",
     val status: NodeStatus = NodeStatus.UNKNOWN,
-    val latencyMs: Long? = null
+    val latencyMs: Long? = null,
+    val statusReason: String? = null
 )
 
 enum class NodeStatus {

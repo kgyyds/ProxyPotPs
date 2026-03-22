@@ -7,6 +7,7 @@ import com.example.proxypotps.data.local.NodeDao
 import com.example.proxypotps.data.local.StressTestDao
 import com.example.proxypotps.data.local.MIGRATION_3_4
 import com.example.proxypotps.data.local.MIGRATION_4_5
+import com.example.proxypotps.data.local.MIGRATION_5_6
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,7 +27,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "proxypot.db")
-            .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .fallbackToDestructiveMigration()
             .build()
     }

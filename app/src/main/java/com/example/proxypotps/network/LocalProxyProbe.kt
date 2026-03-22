@@ -33,7 +33,7 @@ class LocalProxyProbe @Inject constructor(
         val proxyPort = node.localProxyPort
         if (proxyPort == null) {
             Log.e("PROBE", "missing local proxy port for node=${node.name}")
-            return node.copy(status = NodeStatus.UNAVAILABLE, latencyMs = null)
+            return node.copy(status = NodeStatus.UNAVAILABLE, latencyMs = null, statusReason = "MISSING_LOCAL_PROXY_PORT")
         }
         return withContext(Dispatchers.IO) {
             val start = System.currentTimeMillis()
@@ -49,10 +49,18 @@ class LocalProxyProbe @Inject constructor(
             val call = client.newCall(request)
             var errorMessage: String? = null
             var errorDetail: String? = null
+            var statusReason: String? = null
             val result = runCatching {
                 withTimeout(timeoutSeconds * 1000) {
                     call.await().use { response ->
                         logStage(verboseLogs, "HTTP_RESPONSE", node, "code=${response.code} headers=${response.headers}")
+                        if (!response.isSuccessful) {
+                            val errorCode = response.header("X-ProxyPot-Error-Code")
+                            val errorReason = response.header("X-ProxyPot-Error-Detail")
+                            if (!errorCode.isNullOrBlank() && !errorReason.isNullOrBlank()) {
+                                statusReason = "$errorCode:$errorReason"
+                            }
+                        }
                         response.isSuccessful
                     }
                 }
@@ -60,13 +68,16 @@ class LocalProxyProbe @Inject constructor(
             val latency = System.currentTimeMillis() - start
             if (result.isSuccess && result.getOrDefault(false)) {
                 Log.i("PROBE", "PROBE_SUCCESS nodeId=${node.id} node=${node.name} latency=${latency}ms")
-                node.copy(status = NodeStatus.AVAILABLE, latencyMs = latency)
+                node.copy(status = NodeStatus.AVAILABLE, latencyMs = latency, statusReason = null)
             } else {
                 val error = result.exceptionOrNull()
                 errorMessage = error?.message ?: "unknown_error"
                 errorDetail = error?.let { Log.getStackTraceString(it) }
                 val timeout = error is SocketTimeoutException || error is TimeoutCancellationException
                 val status = if (timeout) NodeStatus.TIMEOUT else NodeStatus.UNAVAILABLE
+                if (statusReason == null && !timeout) {
+                    statusReason = "PROBE_ERROR:$errorMessage"
+                }
                 val tag = if (timeout) "PROBE_TIMEOUT" else "PROBE_FAIL"
                 Log.w(
                     "PROBE",
@@ -75,7 +86,7 @@ class LocalProxyProbe @Inject constructor(
                 if (verboseLogs) {
                     Log.e("PROBE", "PROBE_ERROR_DETAIL nodeId=${node.id} node=${node.name}", Exception(errorDetail))
                 }
-                node.copy(status = status, latencyMs = null)
+                node.copy(status = status, latencyMs = null, statusReason = statusReason)
             }
         }
     }

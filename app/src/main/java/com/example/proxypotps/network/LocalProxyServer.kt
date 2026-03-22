@@ -224,7 +224,15 @@ class LocalProxyServer(
         initialPayload: ByteArray,
         isConnect: Boolean
     ) = coroutineScope {
-        val dialer = selectDialer(node)
+        val dialer = try {
+            selectDialer(node)
+        } catch (error: UnsupportedProtocolException) {
+            Log.e("LOCAL_PROXY", "unsupported protocol node=${node.name} reason=${error.issue.detail}")
+            if (!isConnect) {
+                sendBadGateway(clientOutput, error.issue)
+            }
+            return@coroutineScope
+        }
         Log.d("LOCAL_PROXY", "openTunnel start node=${node.name} dest=$destHost:$destPort type=${node.type}")
 
         val tunnel = try {
@@ -232,7 +240,7 @@ class LocalProxyServer(
         } catch (error: Exception) {
             Log.e("LOCAL_PROXY", "tunnel failed node=${node.name} host=$destHost:$destPort err=${error.message}", error)
             if (!isConnect) {
-                sendBadGateway(clientOutput, "tunnel_failed: ${error.message}")
+                sendBadGateway(clientOutput, ProtocolSupportIssue("TUNNEL_FAILED", error.message ?: "unknown"))
             }
             return@coroutineScope
         }
@@ -266,9 +274,12 @@ class LocalProxyServer(
         }
     }
 
-    private fun sendBadGateway(output: BufferedOutputStream, reason: String) {
+    private fun sendBadGateway(output: BufferedOutputStream, reason: ProtocolSupportIssue) {
         try {
-            val response = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            val response = "HTTP/1.1 502 Bad Gateway\r\n" +
+                "X-ProxyPot-Error-Code: ${reason.code}\r\n" +
+                "X-ProxyPot-Error-Detail: ${reason.detail}\r\n" +
+                "Content-Length: 0\r\nConnection: close\r\n\r\n"
             output.write(response.toByteArray())
             output.flush()
         } catch (e: Exception) {
@@ -277,15 +288,13 @@ class LocalProxyServer(
     }
 
     private fun selectDialer(node: ProxyNode): OutboundDialer {
+        node.protocolSupportIssue()?.let { throw UnsupportedProtocolException(it) }
         return when (node.type.lowercase()) {
             "ss", "shadowsocks" -> ssDialer
-            "trojan" -> {
-                if (node.extras["network"]?.lowercase() == "grpc") {
-                    throw IllegalStateException("unsupported_trojan_grpc")
-                }
-                trojanDialer
-            }
-            else -> throw IllegalArgumentException("unsupported_type_${node.type}")
+            "trojan" -> trojanDialer
+            else -> throw UnsupportedProtocolException(
+                ProtocolSupportIssue("UNSUPPORTED_PROTOCOL", node.type.lowercase(Locale.US))
+            )
         }
     }
 

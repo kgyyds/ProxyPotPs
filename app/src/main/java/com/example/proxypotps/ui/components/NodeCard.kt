@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.proxypotps.domain.model.NodeStatus
 import com.example.proxypotps.domain.model.ProxyNode
+import com.example.proxypotps.network.statusReasonText
 import com.example.proxypotps.util.extractFlagEmoji
 
 @Composable
@@ -114,16 +115,14 @@ fun NodeCard(
                         .background(statusColor, CircleShape)
                 )
                 Spacer(modifier = Modifier.size(6.dp))
-                Text(
-                    text = when (node.status) {
-                        NodeStatus.AVAILABLE -> "可用"
-                        NodeStatus.PROBING -> "检测中"
-                        NodeStatus.TIMEOUT -> "timeout"
-                        NodeStatus.UNAVAILABLE -> "不可用"
-                        NodeStatus.UNKNOWN -> "待检测"
-                    },
-                    style = MaterialTheme.typography.labelSmall
-                )
+                val statusText = when (node.status) {
+                    NodeStatus.AVAILABLE -> "可用"
+                    NodeStatus.PROBING -> "检测中"
+                    NodeStatus.TIMEOUT -> "timeout"
+                    NodeStatus.UNAVAILABLE -> node.statusReasonText() ?: "不可用"
+                    NodeStatus.UNKNOWN -> "待检测"
+                }
+                Text(text = statusText, style = MaterialTheme.typography.labelSmall)
             }
             IconButton(
                 onClick = onProbeClick,

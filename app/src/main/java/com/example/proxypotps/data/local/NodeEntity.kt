@@ -16,5 +16,6 @@ data class NodeEntity(
     val localProxyType: String,
     val extrasJson: String,
     val status: String,
-    val latencyMs: Long?
+    val latencyMs: Long?,
+    val statusReason: String?
 )

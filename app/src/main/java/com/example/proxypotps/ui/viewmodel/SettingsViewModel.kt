@@ -6,6 +6,7 @@ import com.example.proxypotps.data.datastore.AppSettings
 import com.example.proxypotps.data.repository.SettingsRepository
 import com.example.proxypotps.domain.model.NodeStatus
 import com.example.proxypotps.domain.usecase.NodeService
+import com.example.proxypotps.domain.usecase.ImportSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,8 @@ class SettingsViewModel @Inject constructor(
     private var probeJob: Job? = null
     private val _diagnosticLogs = MutableStateFlow<List<String>>(emptyList())
     val diagnosticLogs: StateFlow<List<String>> = _diagnosticLogs.asStateFlow()
+    private val _importSummaryText = MutableStateFlow<String?>(null)
+    val importSummaryText: StateFlow<String?> = _importSummaryText.asStateFlow()
 
     val settings: StateFlow<AppSettings> = settingsRepository.settingsFlow
         .stateIn(
@@ -58,7 +61,8 @@ class SettingsViewModel @Inject constructor(
 
     fun parseAndProbe(yamlText: String = settings.value.yamlText) {
         startProbe {
-            nodeService.parseAndStore(yamlText)
+            val importSummary = nodeService.parseAndStore(yamlText)
+            updateImportSummary(importSummary)
             nodeService.probeAllWithUrl(
                 probeUrl = settings.value.probeUrl,
                 verboseLogs = settings.value.verboseProbeLogs,
@@ -110,6 +114,10 @@ class SettingsViewModel @Inject constructor(
         _diagnosticLogs.value = emptyList()
     }
 
+    fun clearImportSummary() {
+        _importSummaryText.value = null
+    }
+
     fun cancelProbe() {
         probeJob?.cancel()
         probeJob = null
@@ -140,6 +148,10 @@ class SettingsViewModel @Inject constructor(
                 inProgress = progress.inProgress
             )
         }
+    }
+
+    private fun updateImportSummary(summary: ImportSummary) {
+        _importSummaryText.value = "已导入 ${summary.total} 个，其中 ${summary.unsupported} 个为当前版本不支持协议"
     }
 }
 
