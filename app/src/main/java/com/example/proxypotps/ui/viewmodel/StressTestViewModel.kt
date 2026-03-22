@@ -13,19 +13,18 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class SlowLorisTestViewModel @Inject constructor(
+class StressTestViewModel @Inject constructor(
     private val stressTestManager: StressTestManager
 ) : ViewModel() {
-    
+
     private val _testState = MutableStateFlow(TestState())
     val testState: StateFlow<TestState> = _testState.asStateFlow()
-    
+
     private var currentTestConfig: StressTestConfig? = null
     private var currentTestJob: Job? = null
     private var currentTestId: String? = null
-    
+
     init {
-        // Collect test results from StressTestManager
         viewModelScope.launch {
             stressTestManager.testResults.collect { summary ->
                 if (currentTestId == summary.testId) {
@@ -42,7 +41,7 @@ class SlowLorisTestViewModel @Inject constructor(
             }
         }
     }
-    
+
     fun configureTest(
         targetUrl: String,
         concurrentConnections: Int,
@@ -51,8 +50,8 @@ class SlowLorisTestViewModel @Inject constructor(
         maxRounds: Int
     ) {
         currentTestConfig = StressTestConfig(
-            testId = "slow_loris_${System.currentTimeMillis()}",
-            testName = "HTTP/HTTPS慢连接压测",
+            testId = "stress_${System.currentTimeMillis()}",
+            testName = "HTTP/HTTPS 慢连接压测",
             targetType = StressTestType.SLOW_LORIS,
             targetUrl = targetUrl,
             concurrentConnections = concurrentConnections,
@@ -61,17 +60,16 @@ class SlowLorisTestViewModel @Inject constructor(
             maxRounds = maxRounds
         )
     }
-    
+
     fun startStressTest() {
         val config = currentTestConfig ?: return
-        
+
         currentTestId = config.testId
-        
+
         currentTestJob = viewModelScope.launch {
             try {
                 stressTestManager.startStressTest(config)
             } catch (e: Exception) {
-                // Handle error
                 _testState.value = _testState.value.copy(
                     isRunning = false,
                     status = StressTestStatus.FAILED
@@ -79,7 +77,7 @@ class SlowLorisTestViewModel @Inject constructor(
             }
         }
     }
-    
+
     fun stopStressTest() {
         currentTestId?.let { testId ->
             viewModelScope.launch {
@@ -91,7 +89,7 @@ class SlowLorisTestViewModel @Inject constructor(
             }
         }
     }
-    
+
     override fun onCleared() {
         super.onCleared()
         currentTestJob?.cancel()
@@ -100,7 +98,7 @@ class SlowLorisTestViewModel @Inject constructor(
             status = StressTestStatus.CANCELLED
         )
     }
-    
+
     data class TestState(
         val isRunning: Boolean = false,
         val currentRound: Int = 0,

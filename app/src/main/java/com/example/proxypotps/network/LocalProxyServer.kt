@@ -121,18 +121,26 @@ class LocalProxyServer(
                 val output = BufferedOutputStream(socket.getOutputStream())
 
                 val headerBytes = readHeaders(input)
-                if (headerBytes.isEmpty()) return@withContext
+                if (headerBytes.isEmpty()) {
+                    Log.w("LOCAL_PROXY", "empty request from client node=${node.name}")
+                    return@withContext
+                }
 
                 val headerText = headerBytes.toString(Charsets.UTF_8)
+                logStage("HTTP_REQUEST", headerText.take(500))
                 val headerLines = headerText.split("\r\n")
                 val requestLine = headerLines.firstOrNull() ?: return@withContext
                 val parts = requestLine.split(" ")
-                if (parts.size < 3) return@withContext
+                if (parts.size < 3) {
+                    Log.w("LOCAL_PROXY", "invalid request line: $requestLine node=${node.name}")
+                    return@withContext
+                }
 
                 val method = parts[0].uppercase(Locale.US)
                 val target = parts[1]
 
                 if (method == "CONNECT") {
+                    logStage("HANDLE_CONNECT", "target=$target")
                     val hostPort = target.split(":")
                     val destHost = hostPort.firstOrNull().orEmpty()
                     val destPort = hostPort.getOrNull(1)?.toIntOrNull() ?: 443
@@ -150,17 +158,24 @@ class LocalProxyServer(
                     val destPort = uri?.port?.takeIf { it > 0 } ?: 80
 
                     if (destHost.isNullOrBlank()) {
-                        Log.e("LOCAL_PROXY", "missing host for node=${node.name}")
+                        Log.e("LOCAL_PROXY", "missing host for node=${node.name} target=$target")
+                        sendBadRequest(output, "missing host")
                         return@withContext
                     }
 
-                    val path = uri?.rawPath?.ifBlank { "/" } ?: "/"
+                    val path = buildString {
+                        append(uri?.rawPath?.ifBlank { "/" } ?: "/")
+                        if (!uri?.rawQuery.isNullOrEmpty()) {
+                            append("?")
+                            append(uri.rawQuery)
+                        }
+                    }
                     val query = uri?.rawQuery?.let { "?$it" }.orEmpty()
                     val newRequestLine = "$method $path$query ${parts[2]}"
 
-                    // 注意：保留原 headers（含 Host）
+                    // 保留原 headers（不含 Host，让后端决定）
                     val rewrittenHeaders = headerLines.drop(1)
-                        .filter { it.isNotBlank() }
+                        .filter { it.isNotBlank() && !it.startsWith("Host:", ignoreCase = true) }
                         .joinToString("\r\n")
 
                     val rebuilt = buildString {
@@ -168,8 +183,11 @@ class LocalProxyServer(
                         if (rewrittenHeaders.isNotBlank()) {
                             append(rewrittenHeaders).append("\r\n")
                         }
+                        append("Host: $destHost\r\n")
                         append("\r\n")
                     }.toByteArray(Charsets.UTF_8)
+
+                    logStage("HTTP_REWRITTEN", rebuilt.toString(Charsets.UTF_8).take(500))
 
                     openTunnelAndPipe(
                         destHost = destHost,
@@ -184,6 +202,20 @@ class LocalProxyServer(
         }
     }
 
+    private fun sendBadRequest(output: BufferedOutputStream, reason: String) {
+        try {
+            val response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            output.write(response.toByteArray())
+            output.flush()
+        } catch (e: Exception) {
+            Log.e("LOCAL_PROXY", "sendBadRequest failed", e)
+        }
+    }
+
+    private fun logStage(stage: String, message: String) {
+        Log.d("LOCAL_PROXY", "$stage node=${node.name} $message")
+    }
+
     private suspend fun openTunnelAndPipe(
         destHost: String,
         destPort: Int,
@@ -193,22 +225,30 @@ class LocalProxyServer(
         isConnect: Boolean
     ) = coroutineScope {
         val dialer = selectDialer(node)
+        Log.d("LOCAL_PROXY", "openTunnel start node=${node.name} dest=$destHost:$destPort type=${node.type}")
 
         val tunnel = try {
             dialer.openTunnel(node.toProbeNode(), destHost, destPort, 8_000)
         } catch (error: Exception) {
-            Log.e("LOCAL_PROXY", "tunnel failed node=${node.name} host=$destHost:$destPort", error)
+            Log.e("LOCAL_PROXY", "tunnel failed node=${node.name} host=$destHost:$destPort err=${error.message}", error)
+            if (!isConnect) {
+                sendBadGateway(clientOutput, "tunnel_failed: ${error.message}")
+            }
             return@coroutineScope
         }
+
+        Log.d("LOCAL_PROXY", "tunnel opened node=${node.name} dest=$destHost:$destPort")
 
         tunnel.use { socketLike ->
             val tunnelInput = BufferedInputStream(socketLike.input)
             val tunnelOutput = BufferedOutputStream(socketLike.output)
 
             if (isConnect) {
+                Log.d("LOCAL_PROXY", "sending CONNECT response node=${node.name}")
                 clientOutput.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray())
                 clientOutput.flush()
             } else {
+                Log.d("LOCAL_PROXY", "sending HTTP request node=${node.name} size=${initialPayload.size}")
                 tunnelOutput.write(initialPayload)
                 tunnelOutput.flush()
             }
@@ -218,10 +258,21 @@ class LocalProxyServer(
 
             try {
                 awaitAll(up, down)
+                Log.d("LOCAL_PROXY", "pipe completed node=${node.name}")
             } finally {
                 up.cancel()
                 down.cancel()
             }
+        }
+    }
+
+    private fun sendBadGateway(output: BufferedOutputStream, reason: String) {
+        try {
+            val response = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            output.write(response.toByteArray())
+            output.flush()
+        } catch (e: Exception) {
+            Log.e("LOCAL_PROXY", "sendBadGateway failed", e)
         }
     }
 

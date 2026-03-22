@@ -1,25 +1,61 @@
 # ProxyPotPs
 
-ProxyPotPs is an Android application for managing proxy nodes and executing HTTP tasks through available proxies.
+ProxyPotPs 是一个 Android 多节点测压程序，用于管理代理节点并执行压力测试。
 
-## Features
+## 功能
 
-- **Proxy Node Management**: Import and manage Shadowsocks/Trojan proxy configurations via YAML
-- **Node Probing**: Test proxy node availability and latency through local proxy services
-- **Task Scheduling**: Execute HTTP tasks (GET/POST) through available proxy nodes with failover support
-- **UI-based Task Configuration**: Configure and dispatch tasks directly through the user interface
+- **节点管理**: 通过 YAML 导入和管理 Shadowsocks/Trojan 代理节点
+- **节点探测**: 测试代理节点可用性和延迟
+- **压力测试**: 对目标服务器执行 Slow Loris 慢连接攻击，测试服务器抗压能力
 
-## Usage
+## 界面
 
-1. **Import Proxy Configuration**: Paste or import your proxy configuration YAML in Settings
-2. **Probe Nodes**: Test node availability and view latency statistics
-3. **Execute Tasks**: Use the "手动添加任务" (Manual Task) button in the Work screen to configure and run HTTP tasks
-4. **View Results**: Monitor task execution progress, success rates, and detailed results
+应用底部导航栏包含 3 个主要界面：
 
-## Architecture
+### 1. 节点
+- 显示所有导入的代理节点列表
+- 每个节点显示名称、类型、状态和延迟
+- 右上角「全部测试」按钮可一键测试所有节点连通性
+- 点击单个节点的测试按钮可单独测试该节点
 
-- Built with Kotlin and Jetpack Compose
-- Clean Architecture with MVVM pattern
-- Local proxy services for each remote node
-- All network traffic routed through configured proxies
-- No external API server - all operations controlled through UI
+### 2. 压测
+- 配置压测参数（目标 URL、并发连接数、超时时间等）
+- 实时显示活跃连接数图表
+- 显示压测状态统计（成功率、当前轮数等）
+- 可随时停止正在运行的压测任务
+
+### 3. 设置
+- 导入 YAML 配置文件
+- 查看节点统计信息
+- 查看节点连接测试日志
+- 配置探测 URL 和节点选择策略
+- 开启/关闭详细日志
+
+## 使用方法
+
+1. **导入节点配置**: 在「设置」界面粘贴或导入 YAML 格式的代理配置
+2. **测试节点**: 在「节点」界面点击「全部测试」按钮测试所有节点连通性
+3. **执行压测**: 在「压测」界面配置目标 URL 和参数，开始压力测试
+4. **查看日志**: 在「设置」界面查看节点连接测试日志
+
+## 技术架构
+
+- **语言**: Kotlin
+- **UI 框架**: Jetpack Compose + Material 3
+- **架构模式**: Clean Architecture + MVVM
+- **依赖注入**: Hilt
+- **本地存储**: Room + DataStore
+- **网络**: OkHttp
+- **图表**: MPAndroidChart
+
+## 构建
+
+```bash
+./gradlew assembleDebug
+```
+
+## 注意事项
+
+- 本工具仅供学习和测试使用
+- 请勿对未授权的目标进行压力测试
+- 使用本工具产生的任何后果由使用者自行承担

@@ -4,9 +4,9 @@ import android.content.Context
 import androidx.room.Room
 import com.example.proxypotps.data.local.AppDatabase
 import com.example.proxypotps.data.local.NodeDao
-import com.example.proxypotps.data.local.TaskDao
 import com.example.proxypotps.data.local.StressTestDao
 import com.example.proxypotps.data.local.MIGRATION_3_4
+import com.example.proxypotps.data.local.MIGRATION_4_5
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,7 +26,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "proxypot.db")
-            .addMigrations(MIGRATION_3_4)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -34,9 +34,6 @@ object AppModule {
     @Provides
     fun provideNodeDao(database: AppDatabase): NodeDao = database.nodeDao()
 
-    @Provides
-    fun provideTaskDao(database: AppDatabase): TaskDao = database.taskDao()
-    
     @Provides
     fun provideStressTestDao(database: AppDatabase): StressTestDao = database.stressTestDao()
 

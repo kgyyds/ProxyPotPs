@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import android.util.Log
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -26,6 +29,8 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
     private val probeProgressState = MutableStateFlow(ProbeProgress(0, 0, false))
     private var probeJob: Job? = null
+    private val _diagnosticLogs = MutableStateFlow<List<String>>(emptyList())
+    val diagnosticLogs: StateFlow<List<String>> = _diagnosticLogs.asStateFlow()
 
     val settings: StateFlow<AppSettings> = settingsRepository.settingsFlow
         .stateIn(
@@ -73,13 +78,36 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun probeDiagnostics() {
+        viewModelScope.launch(Dispatchers.Main) {
+            _diagnosticLogs.value = listOf("=== 开始诊断探测 ===")
+        }
         startProbe {
-            nodeService.probeSampleNodes(
+            val results = nodeService.probeSampleNodes(
                 probeUrl = settings.value.probeUrl,
                 verboseLogs = true,
-                sampleSize = 3
+                sampleSize = 10
             )
+            val resultLogs = buildList {
+                add("=== 探测结果 ===")
+                results.forEach { result ->
+                    val statusText = when (result.status) {
+                        NodeStatus.AVAILABLE -> "可用 (延迟 ${result.latencyMs}ms)"
+                        NodeStatus.PROBING -> "检测中"
+                        NodeStatus.TIMEOUT -> "超时"
+                        NodeStatus.UNAVAILABLE -> "不可用"
+                        NodeStatus.UNKNOWN -> "未知"
+                    }
+                    add("${result.name}: $statusText")
+                }
+            }
+            withContext(Dispatchers.Main) {
+                _diagnosticLogs.value = _diagnosticLogs.value + resultLogs
+            }
         }
+    }
+
+    fun clearDiagnosticLogs() {
+        _diagnosticLogs.value = emptyList()
     }
 
     fun cancelProbe() {
@@ -96,7 +124,8 @@ class SettingsViewModel @Inject constructor(
                 block()
             } catch (error: Exception) {
                 updateProgress(ProbeProgress(inProgress = false))
-                android.util.Log.e("PROBE", "probe task failed", error)
+                Log.e("PROBE", "probe task failed", error)
+                _diagnosticLogs.value = _diagnosticLogs.value + "错误：${error.message}"
             } finally {
                 probeProgressState.update { it.copy(inProgress = false) }
             }

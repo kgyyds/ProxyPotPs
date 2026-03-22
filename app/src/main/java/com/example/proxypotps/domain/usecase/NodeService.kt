@@ -128,6 +128,24 @@ class NodeService @Inject constructor(
         }
     }
 
+    suspend fun probeNode(
+        nodeId: Long,
+        probeUrl: String,
+        verboseLogs: Boolean
+    ): ProxyNode {
+        val node = nodeRepository.getNode(nodeId)
+            ?: throw IllegalArgumentException("Node not found: $nodeId")
+        Log.i("PROBE", "probeNode start nodeId=$nodeId node=${node.name} url=$probeUrl")
+        val proxiedNodes = localProxyManager.ensureProxies(listOf(node))
+        val proxiedNode = proxiedNodes.first()
+        nodeRepository.updateLocalProxy(proxiedNode.id, proxiedNode.localProxyHost, proxiedNode.localProxyPort, proxiedNode.localProxyType)
+        nodeRepository.updateStatus(proxiedNode.id, NodeStatus.PROBING, null)
+        val result = localProxyProbe.probe(proxiedNode, probeUrl, 8, verboseLogs)
+        nodeRepository.updateStatus(result.id, result.status, result.latencyMs)
+        Log.i("PROBE", "probeNode done nodeId=$nodeId node=${result.name} status=${result.status} latency=${result.latencyMs}")
+        return result
+    }
+
     private suspend fun restorePendingStatuses() {
         val nodes = nodeRepository.getNodes()
         nodes.filter { it.status == NodeStatus.PROBING }.forEach { node ->

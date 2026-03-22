@@ -25,4 +25,7 @@ interface NodeDao {
 
     @Query("UPDATE nodes SET localProxyHost = :host, localProxyPort = :port, localProxyType = :type WHERE id = :id")
     suspend fun updateLocalProxy(id: Long, host: String, port: Int?, type: String)
+
+    @Query("SELECT * FROM nodes WHERE id = :id")
+    suspend fun getNode(id: Long): NodeEntity?
 }

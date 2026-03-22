@@ -5,7 +5,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(database: SupportSQLiteDatabase) {
-        // Create stress_tests table
         database.execSQL("""
             CREATE TABLE IF NOT EXISTS `stress_tests` (
                 `test_id` TEXT NOT NULL,
@@ -28,8 +27,7 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
                 PRIMARY KEY(`test_id`)
             )
         """.trimIndent())
-        
-        // Create stress_test_results table
+
         database.execSQL("""
             CREATE TABLE IF NOT EXISTS `stress_test_results` (
                 `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -49,5 +47,13 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
                 `status` TEXT NOT NULL
             )
         """.trimIndent())
+    }
+}
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Drop old task-related tables
+        database.execSQL("DROP TABLE IF EXISTS `sub_tasks`")
+        database.execSQL("DROP TABLE IF EXISTS `tasks`")
     }
 }

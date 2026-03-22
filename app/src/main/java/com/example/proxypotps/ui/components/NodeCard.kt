@@ -12,6 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,7 +36,12 @@ import com.example.proxypotps.domain.model.ProxyNode
 import com.example.proxypotps.util.extractFlagEmoji
 
 @Composable
-fun NodeCard(node: ProxyNode, modifier: Modifier = Modifier) {
+fun NodeCard(
+    node: ProxyNode,
+    isProbing: Boolean,
+    onProbeClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
@@ -63,20 +76,31 @@ fun NodeCard(node: ProxyNode, modifier: Modifier = Modifier) {
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                 }
-                Text(
-                    text = when (node.status) {
-                        NodeStatus.AVAILABLE -> "${node.latencyMs ?: 0}"
-                        NodeStatus.PROBING -> "…"
-                        NodeStatus.TIMEOUT -> "—"
-                        NodeStatus.UNAVAILABLE -> "—"
-                        NodeStatus.UNKNOWN -> "—"
-                    },
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (isProbing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(26.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text(
+                        text = when (node.status) {
+                            NodeStatus.AVAILABLE -> "${node.latencyMs ?: 0}"
+                            NodeStatus.PROBING -> "…"
+                            NodeStatus.TIMEOUT -> "—"
+                            NodeStatus.UNAVAILABLE -> "—"
+                            NodeStatus.UNKNOWN -> "—"
+                        },
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 val statusColor = when (node.status) {
                     NodeStatus.AVAILABLE -> Color(0xFF4CAF50)
                     NodeStatus.PROBING -> Color(0xFF2196F3)
@@ -99,6 +123,33 @@ fun NodeCard(node: ProxyNode, modifier: Modifier = Modifier) {
                         NodeStatus.UNKNOWN -> "待检测"
                     },
                     style = MaterialTheme.typography.labelSmall
+                )
+            }
+            IconButton(
+                onClick = onProbeClick,
+                enabled = !isProbing,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .size(32.dp)
+            ) {
+                val iconColor = when {
+                    isProbing -> MaterialTheme.colorScheme.primary
+                    node.status == NodeStatus.AVAILABLE -> Color(0xFF4CAF50)
+                    node.status == NodeStatus.UNAVAILABLE || node.status == NodeStatus.TIMEOUT -> Color(0xFFF44336)
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                }
+                val icon = when {
+                    isProbing -> Icons.Default.Refresh
+                    node.status == NodeStatus.AVAILABLE -> Icons.Default.CheckCircle
+                    node.status == NodeStatus.UNAVAILABLE || node.status == NodeStatus.TIMEOUT -> Icons.Default.Error
+                    node.status == NodeStatus.UNKNOWN -> Icons.Default.Refresh
+                    else -> Icons.Default.Warning
+                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = "探测节点",
+                    tint = iconColor,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

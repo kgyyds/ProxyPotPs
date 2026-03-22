@@ -37,6 +37,10 @@ class NodeRepository @Inject constructor(
     suspend fun updateLocalProxy(nodeId: Long, host: String, port: Int?, type: String) {
         nodeDao.updateLocalProxy(nodeId, host, port, type)
     }
+
+    suspend fun getNode(nodeId: Long): ProxyNode? {
+        return nodeDao.getNode(nodeId)?.toDomain(json)
+    }
 }
 
 private fun NodeEntity.toDomain(json: Json): ProxyNode {

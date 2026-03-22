@@ -24,8 +24,18 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = "release-key"
+            keyPassword = "ProxyPotPs2026"
+            storeFile = file("../release-key.jks")
+            storePassword = "ProxyPotPs2026"
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

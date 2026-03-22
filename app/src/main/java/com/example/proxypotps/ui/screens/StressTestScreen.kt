@@ -14,15 +14,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.proxypotps.ui.viewmodel.SlowLorisTestViewModel
+import com.example.proxypotps.ui.viewmodel.StressTestViewModel
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.Description
 import com.github.mikephil.charting.components.XAxis
@@ -44,24 +40,15 @@ import com.github.mikephil.charting.data.LineDataSet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SlowLorisTestScreen(
-    onBack: () -> Unit,
-    viewModel: SlowLorisTestViewModel = hiltViewModel()
+fun StressTestScreen(
+    viewModel: StressTestViewModel = hiltViewModel()
 ) {
     val testState by viewModel.testState.collectAsState()
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("慢连接压测") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Filled.ArrowBack,
-                            contentDescription = "返回"
-                        )
-                    }
-                }
+                title = { Text("压测") }
             )
         }
     ) { innerPadding ->
@@ -90,7 +77,7 @@ fun SlowLorisTestScreen(
 
 @Composable
 private fun TestConfigurationForm(
-    viewModel: SlowLorisTestViewModel,
+    viewModel: StressTestViewModel,
     onStartTest: () -> Unit
 ) {
     var targetUrl by remember { mutableStateOf("https://example.com") }
@@ -98,7 +85,7 @@ private fun TestConfigurationForm(
     var connectionTimeout by remember { mutableStateOf("30") }
     var requestInterval by remember { mutableStateOf("1.0") }
     var maxRounds by remember { mutableStateOf("-1") }
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -109,14 +96,14 @@ private fun TestConfigurationForm(
             text = "压测配置",
             style = MaterialTheme.typography.titleMedium
         )
-        
+
         OutlinedTextField(
             value = targetUrl,
             onValueChange = { targetUrl = it },
-            label = { Text("目标URL") },
+            label = { Text("目标 URL") },
             modifier = Modifier.fillMaxWidth()
         )
-        
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -126,33 +113,33 @@ private fun TestConfigurationForm(
                 label = { Text("并发连接数") },
                 modifier = Modifier.weight(1f)
             )
-            
+
             OutlinedTextField(
                 value = connectionTimeout,
                 onValueChange = { connectionTimeout = it },
-                label = { Text("连接超时(秒)") },
+                label = { Text("连接超时 (秒)") },
                 modifier = Modifier.weight(1f)
             )
         }
-        
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedTextField(
                 value = requestInterval,
                 onValueChange = { requestInterval = it },
-                label = { Text("请求间隔(秒)") },
+                label = { Text("请求间隔 (秒)") },
                 modifier = Modifier.weight(1f)
             )
-            
+
             OutlinedTextField(
                 value = maxRounds,
                 onValueChange = { maxRounds = it },
-                label = { Text("最大轮数(-1无限)") },
+                label = { Text("最大轮数 (-1 无限)") },
                 modifier = Modifier.weight(1f)
             )
         }
-        
+
         Button(
             onClick = {
                 viewModel.configureTest(
@@ -173,7 +160,7 @@ private fun TestConfigurationForm(
 
 @Composable
 private fun TestExecutionView(
-    testState: SlowLorisTestViewModel.TestState,
+    testState: StressTestViewModel.TestState,
     onStopTest: () -> Unit
 ) {
     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
@@ -184,7 +171,6 @@ private fun TestExecutionView(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Real-time chart for active connections
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -206,24 +192,9 @@ private fun TestExecutionView(
                             xAxis.position = XAxis.XAxisPosition.BOTTOM
                             axisLeft.setDrawGridLines(false)
                             axisRight.isEnabled = false
-                            
-                            // Set up dummy data for now
-                            val entries = listOf(
-                                Entry(0f, testState.totalActiveConnections.toFloat())
-                            )
-                            val dataSet = LineDataSet(entries, "活跃连接").apply {
-                                color = Color.BLUE
-                                setCircleColor(Color.BLUE)
-                                lineWidth = 2f
-                                circleRadius = 4f
-                                setDrawValues(false)
-                            }
-                            data = LineData(dataSet)
-                            invalidate()
                         }
                     },
                     update = { chart ->
-                        // Update chart with real data
                         val entries = listOf(
                             Entry(0f, testState.totalActiveConnections.toFloat())
                         )
@@ -243,30 +214,7 @@ private fun TestExecutionView(
                 )
             }
         }
-        
-        // Response code distribution chart
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "响应码分布",
-                    style = MaterialTheme.typography.titleSmall
-                )
-                // Placeholder for response code chart
-                androidx.compose.foundation.Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                ) {
-                    drawRect(color = surfaceVariantColor)
-                }
-            }
-        }
-        
-        // Test status summary
+
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -278,54 +226,32 @@ private fun TestExecutionView(
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
-                    text = "当前轮数: ${testState.currentRound}",
+                    text = "当前轮数：${testState.currentRound}",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "总活跃连接: ${testState.totalActiveConnections}",
+                    text = "总活跃连接：${testState.totalActiveConnections}",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "成功连接: ${testState.totalSuccessfulConnections}",
+                    text = "成功连接：${testState.totalSuccessfulConnections}",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "失败连接: ${testState.totalFailedConnections}",
+                    text = "失败连接：${testState.totalFailedConnections}",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "成功率: ${String.format("%.2f", testState.overallSuccessRate * 100)}%",
+                    text = "成功率：${String.format("%.2f", testState.overallSuccessRate * 100)}%",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "状态: ${testState.status.name}",
+                    text = "状态：${testState.status.name}",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
         }
-        
-        // Proxy detailed status list
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "代理详细状态",
-                    style = MaterialTheme.typography.titleSmall
-                )
-                // This will be populated with real data when available
-                androidx.compose.foundation.Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                ) {
-                    drawRect(color = surfaceVariantColor)
-                }
-            }
-        }
-        
+
         Button(
             onClick = onStopTest,
             modifier = Modifier.fillMaxWidth(),

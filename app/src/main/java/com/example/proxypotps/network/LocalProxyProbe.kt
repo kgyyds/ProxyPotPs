@@ -41,14 +41,20 @@ class LocalProxyProbe @Inject constructor(
                 "PROBE",
                 "PROBE_START nodeId=${node.id} node=${node.name} type=${node.type} url=$probeUrl proxy=${node.localProxyHost}:$proxyPort"
             )
-            logStage(verboseLogs, "PROBE_START_DETAIL", node, "timeout=${timeoutSeconds}s")
+            logStage(verboseLogs, "PROBE_START_DETAIL", node, "timeout=${timeoutSeconds}s url=$probeUrl")
             val request = Request.Builder().url(probeUrl).get().build()
             val proxyType = if (node.localProxyType.uppercase() == "SOCKS") Proxy.Type.SOCKS else Proxy.Type.HTTP
+            Log.d("PROBE", "Creating HTTP client proxyType=$proxyType host=${node.localProxyHost}:$proxyPort")
             val client = clientProvider.getClient(proxyType, node.localProxyHost, proxyPort, timeoutSeconds)
             val call = client.newCall(request)
+            var errorMessage: String? = null
+            var errorDetail: String? = null
             val result = runCatching {
                 withTimeout(timeoutSeconds * 1000) {
-                    call.await().use { response -> response.isSuccessful }
+                    call.await().use { response ->
+                        logStage(verboseLogs, "HTTP_RESPONSE", node, "code=${response.code} headers=${response.headers}")
+                        response.isSuccessful
+                    }
                 }
             }
             val latency = System.currentTimeMillis() - start
@@ -57,13 +63,18 @@ class LocalProxyProbe @Inject constructor(
                 node.copy(status = NodeStatus.AVAILABLE, latencyMs = latency)
             } else {
                 val error = result.exceptionOrNull()
+                errorMessage = error?.message ?: "unknown_error"
+                errorDetail = error?.let { Log.getStackTraceString(it) }
                 val timeout = error is SocketTimeoutException || error is TimeoutCancellationException
                 val status = if (timeout) NodeStatus.TIMEOUT else NodeStatus.UNAVAILABLE
                 val tag = if (timeout) "PROBE_TIMEOUT" else "PROBE_FAIL"
                 Log.w(
                     "PROBE",
-                    "$tag nodeId=${node.id} node=${node.name} proxy=${node.localProxyHost}:$proxyPort err=${error?.message}"
+                    "$tag nodeId=${node.id} node=${node.name} proxy=${node.localProxyHost}:$proxyPort err=${errorMessage}"
                 )
+                if (verboseLogs) {
+                    Log.e("PROBE", "PROBE_ERROR_DETAIL nodeId=${node.id} node=${node.name}", Exception(errorDetail))
+                }
                 node.copy(status = status, latencyMs = null)
             }
         }
