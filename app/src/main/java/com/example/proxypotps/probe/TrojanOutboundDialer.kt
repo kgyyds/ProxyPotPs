@@ -4,6 +4,7 @@ import android.util.Log
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.security.MessageDigest
 import javax.net.ssl.SNIHostName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLParameters
@@ -57,12 +58,21 @@ class TrojanOutboundDialer @Inject constructor() : OutboundDialer {
 
                 val request = buildTrojanRequest(destHost, destPort)
                 val header = buildTrojanHeader(password, request)
+                val passwordHash = trojanPasswordHash(password)
                 try {
                     output.write(header)
                     output.flush()
-                    Log.d("TROJAN", "request sent ${node.name} to $destHost:$destPort")
+                    Log.d(
+                        "TROJAN",
+                        "request sent ${node.name} to $destHost:$destPort " +
+                            "authHashPrefix=${passwordHash.take(8)} authHashLen=${passwordHash.length} headerLen=${header.size}"
+                    )
                 } catch (error: Exception) {
-                    Log.e("TROJAN", "request send failed ${node.name}", error)
+                    Log.e(
+                        "TROJAN",
+                        "request send failed ${node.name} authHashPrefix=${passwordHash.take(8)} authHashLen=${passwordHash.length}",
+                        error
+                    )
                     throw error
                 }
 
@@ -84,9 +94,15 @@ class TrojanOutboundDialer @Inject constructor() : OutboundDialer {
     }
 
     private fun buildTrojanHeader(password: String, request: ByteArray): ByteArray {
-        val passwordBytes = password.toByteArray(Charsets.UTF_8)
+        val passwordHash = trojanPasswordHash(password)
+        val passwordBytes = passwordHash.toByteArray(Charsets.UTF_8)
         val crlf = "\r\n".toByteArray(Charsets.UTF_8)
         return passwordBytes + crlf + request + crlf
+    }
+
+    private fun trojanPasswordHash(password: String): String {
+        val digest = MessageDigest.getInstance("SHA-224").digest(password.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
     }
 
     private fun buildTrojanRequest(host: String, port: Int): ByteArray {
